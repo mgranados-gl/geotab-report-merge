@@ -1,420 +1,225 @@
-const REPORT_MERGE_CONFIG = {
-  reportA: {
-    name: "HOS Log",
-    customReport: {
-      id: "b13C",
-      scheduleId: "bAA8",
-      source: "HosLog"
-    },
-    typeNames: ["HosLog", "DutyStatusLog"],
-    keyPath: "driver.id",
-    prefix: "Hos",
-    fields: ["id", "dateTime", "driver.id", "device.id", "state", "status"],
-    buildSearch: (fromIso, toIso) => ({
-      fromDate: fromIso,
-      toDate: toIso
-    })
-  },
-  reportB: {
-    name: "Exceptions Detail",
-    customReport: {
-      id: "b13B",
-      scheduleId: "bAA6",
-      source: "ExceptionsDetail"
-    },
-    typeNames: ["ExceptionEvent"],
-    keyPath: "driver.id",
-    prefix: "Ex",
-    fields: ["id", "dateTime", "driver.id", "device.id", "rule.id", "distance", "duration"],
-    buildSearch: (fromIso, toIso) => ({
-      fromDate: fromIso,
-      toDate: toIso
-    })
-  },
-  joinType: "left"
-};
+/* ── Geotab Add-In: single report pull + Excel export ── */
 
-const runtime = {
-  api: null,
-  uiBound: false
-};
+const runtime = { api: null };
 
 const ui = {
-  reportAInfo: null,
-  reportBInfo: null,
-  fromDate: null,
-  toDate: null,
-  joinTypeInfo: null,
+  typeName: null,
+  searchJson: null,
   fileName: null,
   testBtn: null,
   runBtn: null,
   status: null
 };
 
-function bindUi() {
-  if (runtime.uiBound) {
-    return;
-  }
-
-  ui.reportAInfo = document.getElementById("reportAInfo");
-  ui.reportBInfo = document.getElementById("reportBInfo");
-  ui.fromDate = document.getElementById("fromDate");
-  ui.toDate = document.getElementById("toDate");
-  ui.joinTypeInfo = document.getElementById("joinTypeInfo");
-  ui.fileName = document.getElementById("fileName");
-  ui.testBtn = document.getElementById("testBtn");
-  ui.runBtn = document.getElementById("runBtn");
-  ui.status = document.getElementById("status");
-
-  ui.testBtn.addEventListener("click", testConnection);
-  ui.runBtn.addEventListener("click", runMergeExport);
-  runtime.uiBound = true;
-}
+// ── UI helpers ────────────────────────────────────────────
 
 function setStatus(lines) {
   ui.status.textContent = Array.isArray(lines) ? lines.join("\n") : String(lines);
 }
 
-function setButtonsDisabled(disabled) {
-  ui.testBtn.disabled = disabled;
-  ui.runBtn.disabled = disabled;
+function setBusy(busy) {
+  ui.testBtn.disabled = busy;
+  ui.runBtn.disabled = busy;
 }
 
-function initializeUiDefaults() {
-  ui.reportAInfo.value = `${REPORT_MERGE_CONFIG.reportA.name} | ${REPORT_MERGE_CONFIG.reportA.customReport.source} | id:${REPORT_MERGE_CONFIG.reportA.customReport.id}`;
-  ui.reportBInfo.value = `${REPORT_MERGE_CONFIG.reportB.name} | ${REPORT_MERGE_CONFIG.reportB.customReport.source} | id:${REPORT_MERGE_CONFIG.reportB.customReport.id}`;
-  ui.joinTypeInfo.value = REPORT_MERGE_CONFIG.joinType;
-
-  const now = new Date();
-  const prior = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-  const toLocalInput = (date) => {
-    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-  };
-
-  ui.fromDate.value = toLocalInput(prior);
-  ui.toDate.value = toLocalInput(now);
-}
-
-function toIsoFromLocal(value) {
-  if (!value) {
-    return "";
-  }
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) {
-    return "";
-  }
-  return dt.toISOString();
-}
-
-function getValueByPath(record, path) {
-  return path.split(".").reduce((current, segment) => {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-    return current[segment];
-  }, record);
-}
-
-function valueToCell(value) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  if (typeof value === "object") {
-    if (Object.prototype.hasOwnProperty.call(value, "id")) {
-      return value.id;
-    }
-    return JSON.stringify(value);
-  }
-  return value;
-}
-
-function normalizeFieldName(prefix, path) {
-  return `${prefix}_${path.replaceAll(".", "_")}`;
-}
-
-function projectRow(record, fields, prefix) {
-  const projected = {};
-  fields.forEach((path) => {
-    projected[normalizeFieldName(prefix, path)] = valueToCell(getValueByPath(record, path));
-  });
-  return projected;
-}
-
-function mergeReports(leftRows, rightRows, leftConfig, rightConfig, joinType) {
-  const rightMap = new Map();
-  rightRows.forEach((row) => {
-    const key = getValueByPath(row, rightConfig.keyPath);
-    if (key === undefined || key === null) {
-      return;
-    }
-    if (!rightMap.has(key)) {
-      rightMap.set(key, []);
-    }
-    rightMap.get(key).push(row);
-  });
-
-  const merged = [];
-  const matchedRightIndexes = new Set();
-
-  leftRows.forEach((leftRow) => {
-    const leftValue = getValueByPath(leftRow, leftConfig.keyPath);
-    const matches = rightMap.get(leftValue) || [];
-
-    if (matches.length === 0) {
-      if (joinType === "left" || joinType === "full") {
-        merged.push({
-          ...projectRow(leftRow, leftConfig.fields, leftConfig.prefix)
-        });
-      }
-      return;
-    }
-
-    matches.forEach((rightRow) => {
-      merged.push({
-        ...projectRow(leftRow, leftConfig.fields, leftConfig.prefix),
-        ...projectRow(rightRow, rightConfig.fields, rightConfig.prefix)
-      });
-
-      const idx = rightRows.indexOf(rightRow);
-      if (idx >= 0) {
-        matchedRightIndexes.add(idx);
-      }
-    });
-  });
-
-  if (joinType === "full") {
-    rightRows.forEach((rightRow, idx) => {
-      if (!matchedRightIndexes.has(idx)) {
-        merged.push({
-          ...projectRow(rightRow, rightConfig.fields, rightConfig.prefix)
-        });
-      }
-    });
-  }
-
-  return merged;
-}
-
-function exportToExcel(mergedRows, details, fileName) {
-  const workbook = XLSX.utils.book_new();
-  const mergedSheet = XLSX.utils.json_to_sheet(mergedRows);
-  const detailsSheet = XLSX.utils.json_to_sheet(details);
-
-  XLSX.utils.book_append_sheet(workbook, mergedSheet, "Merged");
-  XLSX.utils.book_append_sheet(workbook, detailsSheet, "RunDetails");
-  XLSX.writeFile(workbook, fileName || "geotab-report-merge.xlsx");
-}
+// ── API call via Geotab add-in session ───────────────────
 
 function callApi(method, params) {
   if (!runtime.api || typeof runtime.api.call !== "function") {
-    throw new Error("MyGeotab API session is not available. Open this page as a registered MyGeotab add-in.");
+    throw new Error(
+      "MyGeotab API is not available. " +
+      "Open this page as a registered add-in inside MyGeotab."
+    );
   }
-
   return new Promise((resolve, reject) => {
     runtime.api.call(method, params, resolve, reject);
   });
 }
 
-async function getReportDataByTypeFallback(typeNames, search, label, resultsLimit) {
-  let lastError;
+// ── Input helpers ────────────────────────────────────────
 
-  for (const typeName of typeNames) {
+function getInputs() {
+  const typeName = ui.typeName.value.trim();
+  if (!typeName) {
+    throw new Error("Type Name is required.");
+  }
+
+  const raw = ui.searchJson.value.trim();
+  let search = {};
+  if (raw) {
     try {
-      const params = {
-        typeName,
-        search
-      };
-
-      if (typeof resultsLimit === "number" && resultsLimit > 0) {
-        params.resultsLimit = resultsLimit;
-      }
-
-      const result = await callApi("Get", params);
-      return {
-        typeName,
-        rows: Array.isArray(result) ? result : []
-      };
-    } catch (error) {
-      lastError = error;
+      search = JSON.parse(raw);
+    } catch {
+      throw new Error("Search JSON is not valid JSON. Check your syntax.");
     }
   }
 
-  throw new Error(`Unable to pull ${label}. Tried: ${typeNames.join(", ")}. Last error: ${lastError?.message || "unknown"}`);
+  const fileName = ui.fileName.value.trim() || "geotab-report.xlsx";
+  return { typeName, search, fileName };
 }
 
-function getRunInputs() {
-  const fromIso = toIsoFromLocal(ui.fromDate.value);
-  const toIso = toIsoFromLocal(ui.toDate.value);
+// ── Flatten a row for Excel export ───────────────────────
 
-  if (!fromIso || !toIso) {
-    throw new Error("From and To date are required.");
+function flattenRow(record) {
+  const out = {};
+  function walk(obj, prefix) {
+    Object.entries(obj || {}).forEach(([k, v]) => {
+      const col = prefix ? `${prefix}.${k}` : k;
+      if (v === null || v === undefined) {
+        out[col] = "";
+      } else if (typeof v === "object" && !Array.isArray(v)) {
+        if (Object.prototype.hasOwnProperty.call(v, "id")) {
+          out[`${col}.id`] = v.id;
+        } else {
+          walk(v, col);
+        }
+      } else if (Array.isArray(v)) {
+        out[col] = JSON.stringify(v);
+      } else {
+        out[col] = v;
+      }
+    });
   }
-
-  if (new Date(fromIso).getTime() > new Date(toIso).getTime()) {
-    throw new Error("From date must be before To date.");
-  }
-
-  const fileName = ui.fileName.value.trim() || "geotab-report-merge.xlsx";
-
-  return {
-    fromIso,
-    toIso,
-    fileName,
-    reportAConfig: REPORT_MERGE_CONFIG.reportA,
-    reportBConfig: REPORT_MERGE_CONFIG.reportB,
-    joinType: REPORT_MERGE_CONFIG.joinType
-  };
+  walk(record, "");
+  return out;
 }
+
+// ── Excel export ─────────────────────────────────────────
+
+function exportToExcel(rows, fileName) {
+  const flat = rows.map(flattenRow);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(flat);
+  XLSX.utils.book_append_sheet(wb, ws, "Report");
+  XLSX.writeFile(wb, fileName);
+}
+
+// ── Test: pull 1 row ─────────────────────────────────────
 
 async function testConnection() {
-  setButtonsDisabled(true);
-
+  setBusy(true);
   try {
-    const inputs = getRunInputs();
+    const { typeName, search } = getInputs();
+    setStatus(`Testing — pulling 1 row from "${typeName}"...`);
 
-    setStatus([
-      "Testing Report A...",
-      "Testing Report B..."
-    ]);
+    const result = await callApi("Get", { typeName, search, resultsLimit: 1 });
+    const rows = Array.isArray(result) ? result : [];
 
-    const [reportAResult, reportBResult] = await Promise.all([
-      getReportDataByTypeFallback(
-        inputs.reportAConfig.typeNames,
-        inputs.reportAConfig.buildSearch(inputs.fromIso, inputs.toIso),
-        inputs.reportAConfig.name,
-        1
-      ),
-      getReportDataByTypeFallback(
-        inputs.reportBConfig.typeNames,
-        inputs.reportBConfig.buildSearch(inputs.fromIso, inputs.toIso),
-        inputs.reportBConfig.name,
-        1
-      )
-    ]);
-
-    setStatus([
-      "Connection test passed.",
-      `Report A OK: ${inputs.reportAConfig.name} via ${reportAResult.typeName}`,
-      `Report B OK: ${inputs.reportBConfig.name} via ${reportBResult.typeName}`,
-      "Ready to run full export."
-    ]);
-  } catch (error) {
-    setStatus([
-      "Connection test failed.",
-      error.message || String(error)
-    ]);
+    if (rows.length === 0) {
+      setStatus([
+        "Test OK — API call succeeded.",
+        `Type "${typeName}" returned 0 rows for the given search.`,
+        "Try broadening your Search JSON or leaving it blank."
+      ]);
+    } else {
+      const cols = Object.keys(flattenRow(rows[0]));
+      setStatus([
+        "Test OK — 1 row received.",
+        `Type: ${typeName}`,
+        `Columns: ${cols.join(", ")}`
+      ]);
+    }
+  } catch (err) {
+    setStatus(["Test failed.", err.message || String(err)]);
   } finally {
-    setButtonsDisabled(false);
+    setBusy(false);
   }
 }
 
-async function runMergeExport() {
-  setButtonsDisabled(true);
+// ── Run: pull all rows and export ────────────────────────
 
+async function runExport() {
+  setBusy(true);
   try {
-    const inputs = getRunInputs();
+    const { typeName, search, fileName } = getInputs();
+    setStatus(`Pulling all rows from "${typeName}"...`);
 
-    setStatus([
-      "Pulling Report A...",
-      "Pulling Report B..."
-    ]);
+    const result = await callApi("Get", { typeName, search });
+    const rows = Array.isArray(result) ? result : [];
 
-    const [reportAResult, reportBResult] = await Promise.all([
-      getReportDataByTypeFallback(
-        inputs.reportAConfig.typeNames,
-        inputs.reportAConfig.buildSearch(inputs.fromIso, inputs.toIso),
-        inputs.reportAConfig.name
-      ),
-      getReportDataByTypeFallback(
-        inputs.reportBConfig.typeNames,
-        inputs.reportBConfig.buildSearch(inputs.fromIso, inputs.toIso),
-        inputs.reportBConfig.name
-      )
-    ]);
+    if (rows.length === 0) {
+      setStatus([
+        "API call succeeded but returned 0 rows.",
+        "Try broadening your Search JSON or leaving it blank."
+      ]);
+      return;
+    }
 
-    const mergedRows = mergeReports(
-      reportAResult.rows,
-      reportBResult.rows,
-      inputs.reportAConfig,
-      inputs.reportBConfig,
-      inputs.joinType
-    );
-
-    exportToExcel(
-      mergedRows,
-      [
-        { key: "Run At", value: new Date().toISOString() },
-        { key: "From Date", value: inputs.fromIso },
-        { key: "To Date", value: inputs.toIso },
-        { key: "Report A", value: `${inputs.reportAConfig.name} (${reportAResult.typeName})` },
-        { key: "Report A Custom Report", value: `${inputs.reportAConfig.customReport.source} | id:${inputs.reportAConfig.customReport.id} | scheduleId:${inputs.reportAConfig.customReport.scheduleId}` },
-        { key: "Report B", value: `${inputs.reportBConfig.name} (${reportBResult.typeName})` },
-        { key: "Report B Custom Report", value: `${inputs.reportBConfig.customReport.source} | id:${inputs.reportBConfig.customReport.id} | scheduleId:${inputs.reportBConfig.customReport.scheduleId}` },
-        { key: "Join Type", value: inputs.joinType },
-        { key: "Report A Rows", value: reportAResult.rows.length },
-        { key: "Report B Rows", value: reportBResult.rows.length },
-        { key: "Merged Rows", value: mergedRows.length }
-      ],
-      inputs.fileName
-    );
+    setStatus(`Received ${rows.length} rows. Exporting to Excel...`);
+    exportToExcel(rows, fileName);
 
     setStatus([
       "Export complete.",
-      `Report A rows: ${reportAResult.rows.length}`,
-      `Report B rows: ${reportBResult.rows.length}`,
-      `Merged rows: ${mergedRows.length}`,
-      `Saved as: ${inputs.fileName}`
+      `Type: ${typeName}`,
+      `Rows: ${rows.length}`,
+      `File: ${fileName}`
     ]);
-  } catch (error) {
-    setStatus([
-      "Run failed.",
-      error.message || String(error)
-    ]);
+  } catch (err) {
+    setStatus(["Export failed.", err.message || String(err)]);
   } finally {
-    setButtonsDisabled(false);
+    setBusy(false);
   }
 }
 
-function onAddInReady(api) {
+// ── Add-in lifecycle ─────────────────────────────────────
+
+function onReady(api) {
   runtime.api = api;
-  bindUi();
-  initializeUiDefaults();
-  setButtonsDisabled(false);
-  setStatus("Ready. Click Test Connection.");
+
+  ui.typeName  = document.getElementById("typeName");
+  ui.searchJson = document.getElementById("searchJson");
+  ui.fileName  = document.getElementById("fileName");
+  ui.testBtn   = document.getElementById("testBtn");
+  ui.runBtn    = document.getElementById("runBtn");
+  ui.status    = document.getElementById("status");
+
+  ui.testBtn.addEventListener("click", testConnection);
+  ui.runBtn.addEventListener("click", runExport);
+
+  setBusy(false);
+  setStatus("Ready. Enter a Type Name and click Test or Pull Report.");
 }
 
-function bootstrapStandaloneMode() {
-  bindUi();
-  initializeUiDefaults();
-  setButtonsDisabled(true);
-  setStatus("This page must be opened inside MyGeotab as a registered add-in.");
+function onStandalone() {
+  ui.typeName  = document.getElementById("typeName");
+  ui.searchJson = document.getElementById("searchJson");
+  ui.fileName  = document.getElementById("fileName");
+  ui.testBtn   = document.getElementById("testBtn");
+  ui.runBtn    = document.getElementById("runBtn");
+  ui.status    = document.getElementById("status");
+
+  setBusy(true);
+  setStatus(
+    "No MyGeotab session detected.\n" +
+    "Open this page as a registered add-in inside MyGeotab."
+  );
 }
 
+// Standalone fallback (direct browser open)
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", bootstrapStandaloneMode);
+  document.addEventListener("DOMContentLoaded", onStandalone);
 } else {
-  bootstrapStandaloneMode();
+  onStandalone();
 }
 
+// Geotab Add-In entry point
 window.geotab = window.geotab || {};
 window.geotab.addin = window.geotab.addin || {};
-
-window.geotab.addin.reportMerge = function (api) {
+window.geotab.addin.reportExport = function (api) {
   return {
-    initialize: function (freshApi, state, callback) {
-      onAddInReady(freshApi || api);
+    initialize(freshApi, state, callback) {
+      onReady(freshApi || api);
       callback();
     },
-    focus: function (freshApi, state, callback) {
-      onAddInReady(freshApi || api);
+    focus(freshApi, state, callback) {
+      if (freshApi || api) {
+        runtime.api = freshApi || api;
+      }
       callback();
     },
-    blur: function () {},
-    destroy: function () {
+    blur() {},
+    destroy() {
       runtime.api = null;
-      setButtonsDisabled(true);
-      setStatus("Add-in destroyed.");
     }
   };
 };

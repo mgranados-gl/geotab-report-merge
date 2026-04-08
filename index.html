@@ -3,82 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Geotab Report Merge</title>
+  <title>Geotab Report Export</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <main class="container">
-    <h1>Geotab Report Merge</h1>
-    <p class="subtitle">Pull two datasets from MyGeotab, merge them, and export a single Excel file.</p>
+    <h1>Geotab Report Export</h1>
+    <p class="subtitle">Pull a single report from MyGeotab and export it to Excel.</p>
 
     <section class="card">
-      <h2>Connection</h2>
+      <h2>Report</h2>
       <div class="grid two-col">
         <label>
-          Server
-          <input id="server" value="https://my.geotab.com" placeholder="https://my.geotab.com" />
+          Type Name
+          <input id="typeName" value="ExceptionEvent" placeholder="e.g. ExceptionEvent" />
         </label>
         <label>
-          Database
-          <input id="database" placeholder="yourDatabase" />
-        </label>
-        <label>
-          Username
-          <input id="username" placeholder="user@company.com" />
-          <p class="subtitle">Uses current MyGeotab session to pull 2 fixed reports, merge, and export one Excel file.</p>
-        <label>
-          Password
-          <input id="password" type="password" placeholder="••••••••" />
-            <p class="subtitle">Configured from your Airgas report links.</p>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Fixed Reports</h2>
-      <p class="subtitle">This add-in is configured in code to merge two specific reports.</p>
-      <div class="grid two-col">
-        <label>
-          Report A
-          <input id="reportAInfo" readonly />
-        </label>
-        <label>
-          Report B
-          <input id="reportBInfo" readonly />
-        </label>
-      </div>
-                From
-
-    <section class="card">
-      <h2>Date Range</h2>
-                To
-        <label>
-          From (UTC)
-          <input id="fromDate" type="datetime-local" />
-        </label>
-        <label>
-          To (UTC)
-          <input id="toDate" type="datetime-local" />
-        </label>
-        <label>
-          Join Type
-          <input id="joinTypeInfo" readonly />
+          Output File Name
+          <input id="fileName" value="geotab-report.xlsx" />
         </label>
       </div>
       <label>
-        Output File Name
-            <button id="runBtn" type="button">Run Merge & Export Excel</button>
+        Search JSON <span class="hint">(optional — leave blank for no filter)</span>
+        <textarea id="searchJson" rows="4" placeholder='{"fromDate": "2026-04-01T00:00:00Z", "toDate": "2026-04-08T00:00:00Z"}'></textarea>
       </label>
     </section>
 
     <div class="actions">
-      <button id="testBtn" type="button">Test Connection</button>
-      <button id="runBtn">Run Fixed Reports & Export Excel</button>
+      <button id="testBtn" type="button">Test (1 row)</button>
+      <button id="runBtn" type="button">Pull Report &amp; Export Excel</button>
     </div>
 
     <section class="card">
       <h2>Status</h2>
-      <pre id="status">Ready.</pre>
+      <pre id="status">Open this page inside MyGeotab as a registered add-in.</pre>
     </section>
   </main>
 
