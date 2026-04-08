@@ -1,0 +1,14 @@
+{
+  "name": "Report Merge",
+  "supportEmail": "you@company.com",
+  "version": "1.0",
+  "items": [
+    {
+      "url": "https://YOUR-HOSTED-URL/index.html",
+      "path": "reportMerge",
+      "menuName": {
+        "en": "Report Merge"
+      }
+    }
+  ]
+}
