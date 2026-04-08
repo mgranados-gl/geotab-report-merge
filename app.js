@@ -6,10 +6,13 @@ const ui = {
   typeName: null,
   searchJson: null,
   fileName: null,
+  datePreset: null,
   fromDate: null,
   toDate: null,
-  deviceId: null,
-  driverId: null,
+  exceptionRuleSelect: null,
+  deviceSelect: null,
+  driverSelect: null,
+  loadFilterDataBtn: null,
   buildSearchBtn: null,
   clearSearchBtn: null,
   testBtn: null,
@@ -32,6 +35,131 @@ function setBusy(busy) {
   if (ui.clearSearchBtn) {
     ui.clearSearchBtn.disabled = busy;
   }
+  if (ui.loadFilterDataBtn) {
+    ui.loadFilterDataBtn.disabled = busy;
+  }
+}
+
+function toInputDateTimeValue(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return [
+    date.getUTCFullYear(),
+    "-",
+    pad(date.getUTCMonth() + 1),
+    "-",
+    pad(date.getUTCDate()),
+    "T",
+    pad(date.getUTCHours()),
+    ":",
+    pad(date.getUTCMinutes())
+  ].join("");
+}
+
+function applyDatePreset() {
+  const now = new Date();
+  const end = new Date(now);
+  let start = null;
+
+  switch (ui.datePreset.value) {
+    case "today": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+      break;
+    }
+    case "yesterday": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
+      end.setUTCFullYear(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+      end.setUTCHours(23, 59, 59, 0);
+      break;
+    }
+    case "last7": {
+      start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+      break;
+    }
+    case "last30": {
+      start = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      break;
+    }
+    case "monthToDate": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+      break;
+    }
+    default: {
+      return;
+    }
+  }
+
+  ui.fromDate.value = toInputDateTimeValue(start);
+  ui.toDate.value = toInputDateTimeValue(end);
+}
+
+function resetSelectOptions(selectEl, emptyLabel) {
+  selectEl.innerHTML = "";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = emptyLabel;
+  selectEl.appendChild(defaultOption);
+}
+
+function optionText(item, fallbackPrefix) {
+  if (item.name) {
+    return item.name;
+  }
+  if (item.firstName || item.lastName) {
+    const fullName = [item.firstName || "", item.lastName || ""].join(" ").trim();
+    if (fullName) {
+      return fullName;
+    }
+  }
+  return `${fallbackPrefix} ${item.id}`;
+}
+
+function fillSelect(selectEl, items, emptyLabel, fallbackPrefix) {
+  resetSelectOptions(selectEl, emptyLabel);
+  items.forEach((item) => {
+    if (!item || !item.id) {
+      return;
+    }
+    const opt = document.createElement("option");
+    opt.value = item.id;
+    opt.textContent = optionText(item, fallbackPrefix);
+    selectEl.appendChild(opt);
+  });
+}
+
+async function loadFilterData() {
+  setBusy(true);
+  try {
+    setStatus("Loading filter dropdown data from Geotab...");
+
+    const [rulesResult, devicesResult, driversResult] = await Promise.all([
+      callApi("Get", { typeName: "Rule", resultsLimit: 500 }),
+      callApi("Get", { typeName: "Device", resultsLimit: 500 }),
+      callApi("Get", { typeName: "User", search: { isDriver: true }, resultsLimit: 500 })
+    ]);
+
+    const rules = Array.isArray(rulesResult) ? rulesResult : [];
+    const devices = Array.isArray(devicesResult) ? devicesResult : [];
+    const drivers = Array.isArray(driversResult) ? driversResult : [];
+
+    fillSelect(ui.exceptionRuleSelect, rules, "Any Exception Rule", "Rule");
+    fillSelect(ui.deviceSelect, devices, "Any Asset", "Asset");
+    fillSelect(ui.driverSelect, drivers, "Any Driver", "Driver");
+
+    setStatus([
+      "Filter dropdowns loaded.",
+      `Rules: ${rules.length}`,
+      `Assets: ${devices.length}`,
+      `Drivers: ${drivers.length}`
+    ]);
+  } catch (err) {
+    setStatus([
+      "Could not load one or more dropdowns.",
+      err.message || String(err),
+      "You can still paste Search JSON manually."
+    ]);
+  } finally {
+    setBusy(false);
+  }
 }
 
 function toIsoFromLocalDateTime(value) {
@@ -46,13 +174,24 @@ function toIsoFromLocalDateTime(value) {
   return dt.toISOString();
 }
 
+function getSelectedValues(selectEl) {
+  const selected = [];
+  Array.from(selectEl.options).forEach((opt) => {
+    if (opt.selected && opt.value) {
+      selected.push(opt.value);
+    }
+  });
+  return selected;
+}
+
 function buildSearchFromFilters() {
   const fromIso = toIsoFromLocalDateTime(ui.fromDate.value.trim());
   const toIso = toIsoFromLocalDateTime(ui.toDate.value.trim());
-  const deviceId = ui.deviceId.value.trim();
-  const driverId = ui.driverId.value.trim();
+  const ruleIds = getSelectedValues(ui.exceptionRuleSelect);
+  const deviceIds = getSelectedValues(ui.deviceSelect);
+  const driverIds = getSelectedValues(ui.driverSelect);
 
-  if (!fromIso && !toIso && !deviceId && !driverId) {
+  if (!fromIso && !toIso && ruleIds.length === 0 && deviceIds.length === 0 && driverIds.length === 0) {
     ui.searchJson.value = "";
     setStatus([
       "Filters cleared.",
@@ -68,11 +207,14 @@ function buildSearchFromFilters() {
   if (toIso) {
     search.toDate = toIso;
   }
-  if (deviceId) {
-    search.deviceSearch = { id: deviceId };
+  if (ruleIds.length > 0) {
+    search.ruleSearch = { id: ruleIds.length === 1 ? ruleIds[0] : ruleIds };
   }
-  if (driverId) {
-    search.driverSearch = { id: driverId };
+  if (deviceIds.length > 0) {
+    search.deviceSearch = { id: deviceIds.length === 1 ? deviceIds[0] : deviceIds };
+  }
+  if (driverIds.length > 0) {
+    search.driverSearch = { id: driverIds.length === 1 ? driverIds[0] : driverIds };
   }
 
   ui.searchJson.value = JSON.stringify(search, null, 2);
@@ -83,10 +225,18 @@ function buildSearchFromFilters() {
 }
 
 function clearFilters() {
+  ui.datePreset.value = "custom";
   ui.fromDate.value = "";
   ui.toDate.value = "";
-  ui.deviceId.value = "";
-  ui.driverId.value = "";
+  Array.from(ui.exceptionRuleSelect.options).forEach((opt) => {
+    opt.selected = false;
+  });
+  Array.from(ui.deviceSelect.options).forEach((opt) => {
+    opt.selected = false;
+  });
+  Array.from(ui.driverSelect.options).forEach((opt) => {
+    opt.selected = false;
+  });
   ui.searchJson.value = "";
 
   setStatus([
@@ -242,16 +392,21 @@ function onReady(api) {
   ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
+  ui.datePreset = document.getElementById("datePreset");
   ui.fromDate  = document.getElementById("fromDate");
   ui.toDate    = document.getElementById("toDate");
-  ui.deviceId  = document.getElementById("deviceId");
-  ui.driverId  = document.getElementById("driverId");
+  ui.exceptionRuleSelect = document.getElementById("exceptionRuleSelect");
+  ui.deviceSelect = document.getElementById("deviceSelect");
+  ui.driverSelect = document.getElementById("driverSelect");
+  ui.loadFilterDataBtn = document.getElementById("loadFilterDataBtn");
   ui.buildSearchBtn = document.getElementById("buildSearchBtn");
   ui.clearSearchBtn = document.getElementById("clearSearchBtn");
   ui.testBtn   = document.getElementById("testBtn");
   ui.runBtn    = document.getElementById("runBtn");
   ui.status    = document.getElementById("status");
 
+  ui.datePreset.addEventListener("change", applyDatePreset);
+  ui.loadFilterDataBtn.addEventListener("click", loadFilterData);
   ui.buildSearchBtn.addEventListener("click", buildSearchFromFilters);
   ui.clearSearchBtn.addEventListener("click", clearFilters);
   ui.testBtn.addEventListener("click", testConnection);
@@ -259,16 +414,21 @@ function onReady(api) {
 
   setBusy(false);
   setStatus("Ready. Enter a Type Name and click Test or Pull Report.");
+  applyDatePreset();
+  loadFilterData();
 }
 
 function onStandalone() {
   ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
+  ui.datePreset = document.getElementById("datePreset");
   ui.fromDate  = document.getElementById("fromDate");
   ui.toDate    = document.getElementById("toDate");
-  ui.deviceId  = document.getElementById("deviceId");
-  ui.driverId  = document.getElementById("driverId");
+  ui.exceptionRuleSelect = document.getElementById("exceptionRuleSelect");
+  ui.deviceSelect = document.getElementById("deviceSelect");
+  ui.driverSelect = document.getElementById("driverSelect");
+  ui.loadFilterDataBtn = document.getElementById("loadFilterDataBtn");
   ui.buildSearchBtn = document.getElementById("buildSearchBtn");
   ui.clearSearchBtn = document.getElementById("clearSearchBtn");
   ui.testBtn   = document.getElementById("testBtn");

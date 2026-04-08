@@ -30,7 +30,26 @@
       </label>
 
       <h2>Search Filter Builder</h2>
-      <p class="hint">Build Search JSON using date range and optional driver/device IDs.</p>
+      <p class="hint">Build Search JSON with date range and optional exception, asset, and driver filters.</p>
+      <div class="grid two-col">
+        <label>
+          Date Range Preset
+          <select id="datePreset">
+            <option value="custom">Custom</option>
+            <option value="today">Today (UTC)</option>
+            <option value="yesterday">Yesterday (UTC)</option>
+            <option value="last7" selected>Last 7 Days (UTC)</option>
+            <option value="last30">Last 30 Days (UTC)</option>
+            <option value="monthToDate">Month to Date (UTC)</option>
+          </select>
+        </label>
+        <label>
+          Exception Rule (optional — hold Ctrl/Cmd to multi-select)
+          <select id="exceptionRuleSelect" multiple>
+            <option value="">Any Exception Rule</option>
+          </select>
+        </label>
+      </div>
       <div class="grid two-col">
         <label>
           From Date/Time (UTC)
@@ -43,15 +62,20 @@
       </div>
       <div class="grid two-col">
         <label>
-          Device ID (optional)
-          <input id="deviceId" placeholder="e.g. b1" />
+          Asset (optional — hold Ctrl/Cmd to multi-select)
+          <select id="deviceSelect" multiple>
+            <option value="">Any Asset</option>
+          </select>
         </label>
         <label>
-          Driver ID (optional)
-          <input id="driverId" placeholder="e.g. b2" />
+          Driver (optional — hold Ctrl/Cmd to multi-select)
+          <select id="driverSelect" multiple>
+            <option value="">Any Driver</option>
+          </select>
         </label>
       </div>
       <div class="actions inline-actions">
+        <button id="loadFilterDataBtn" type="button" class="secondary">Refresh Dropdown Data</button>
         <button id="buildSearchBtn" type="button">Build Search JSON</button>
         <button id="clearSearchBtn" type="button" class="secondary">Clear Filters</button>
       </div>
