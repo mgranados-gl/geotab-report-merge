@@ -97,6 +97,10 @@ textarea {
   flex-wrap: wrap;
 }
 
+.inline-actions {
+  margin-top: 8px;
+}
+
 button {
   border: 0;
   border-radius: 8px;
@@ -110,6 +114,10 @@ button {
 button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+button.secondary {
+  background: #6b7280;
 }
 
 pre {

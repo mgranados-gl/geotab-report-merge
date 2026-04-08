@@ -6,6 +6,12 @@ const ui = {
   typeName: null,
   searchJson: null,
   fileName: null,
+  fromDate: null,
+  toDate: null,
+  deviceId: null,
+  driverId: null,
+  buildSearchBtn: null,
+  clearSearchBtn: null,
   testBtn: null,
   runBtn: null,
   status: null
@@ -20,6 +26,73 @@ function setStatus(lines) {
 function setBusy(busy) {
   ui.testBtn.disabled = busy;
   ui.runBtn.disabled = busy;
+  if (ui.buildSearchBtn) {
+    ui.buildSearchBtn.disabled = busy;
+  }
+  if (ui.clearSearchBtn) {
+    ui.clearSearchBtn.disabled = busy;
+  }
+}
+
+function toIsoFromLocalDateTime(value) {
+  if (!value) {
+    return null;
+  }
+
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) {
+    return null;
+  }
+  return dt.toISOString();
+}
+
+function buildSearchFromFilters() {
+  const fromIso = toIsoFromLocalDateTime(ui.fromDate.value.trim());
+  const toIso = toIsoFromLocalDateTime(ui.toDate.value.trim());
+  const deviceId = ui.deviceId.value.trim();
+  const driverId = ui.driverId.value.trim();
+
+  if (!fromIso && !toIso && !deviceId && !driverId) {
+    ui.searchJson.value = "";
+    setStatus([
+      "Filters cleared.",
+      "Search JSON is blank and no filter will be applied."
+    ]);
+    return;
+  }
+
+  const search = {};
+  if (fromIso) {
+    search.fromDate = fromIso;
+  }
+  if (toIso) {
+    search.toDate = toIso;
+  }
+  if (deviceId) {
+    search.deviceSearch = { id: deviceId };
+  }
+  if (driverId) {
+    search.driverSearch = { id: driverId };
+  }
+
+  ui.searchJson.value = JSON.stringify(search, null, 2);
+  setStatus([
+    "Search JSON updated from filters.",
+    "You can edit it manually before running Test or Export."
+  ]);
+}
+
+function clearFilters() {
+  ui.fromDate.value = "";
+  ui.toDate.value = "";
+  ui.deviceId.value = "";
+  ui.driverId.value = "";
+  ui.searchJson.value = "";
+
+  setStatus([
+    "Filters reset.",
+    "Search JSON is now blank."
+  ]);
 }
 
 // ── API call via Geotab add-in session ───────────────────
@@ -169,10 +242,18 @@ function onReady(api) {
   ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
+  ui.fromDate  = document.getElementById("fromDate");
+  ui.toDate    = document.getElementById("toDate");
+  ui.deviceId  = document.getElementById("deviceId");
+  ui.driverId  = document.getElementById("driverId");
+  ui.buildSearchBtn = document.getElementById("buildSearchBtn");
+  ui.clearSearchBtn = document.getElementById("clearSearchBtn");
   ui.testBtn   = document.getElementById("testBtn");
   ui.runBtn    = document.getElementById("runBtn");
   ui.status    = document.getElementById("status");
 
+  ui.buildSearchBtn.addEventListener("click", buildSearchFromFilters);
+  ui.clearSearchBtn.addEventListener("click", clearFilters);
   ui.testBtn.addEventListener("click", testConnection);
   ui.runBtn.addEventListener("click", runExport);
 
@@ -184,6 +265,12 @@ function onStandalone() {
   ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
+  ui.fromDate  = document.getElementById("fromDate");
+  ui.toDate    = document.getElementById("toDate");
+  ui.deviceId  = document.getElementById("deviceId");
+  ui.driverId  = document.getElementById("driverId");
+  ui.buildSearchBtn = document.getElementById("buildSearchBtn");
+  ui.clearSearchBtn = document.getElementById("clearSearchBtn");
   ui.testBtn   = document.getElementById("testBtn");
   ui.runBtn    = document.getElementById("runBtn");
   ui.status    = document.getElementById("status");
