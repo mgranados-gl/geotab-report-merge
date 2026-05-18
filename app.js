@@ -1,296 +1,159 @@
-/* ── Geotab Add-In: dual report pull + multi-sheet Excel export ── */
+/* ── Geotab Add-In: Dual Report Export with Template ── */
 
 const runtime = { api: null };
 
-const REPORT_CONFIG = {
+const CONFIG = {
   templateUrl: "https://mgranados-gl.github.io/geotab-report-merge/template/Gridline%20_%20Driver%20Events%20(Yesterday).xlsx",
-  report1: {
-    typeName: "HosLog",
-    fallbackTypeName: "DutyStatusLog",
-    sheetName: "Data1",
-    description: "HosLog"
-  },
-  report2: {
-    typeName: "ExceptionsDetail",
-    sheetName: "Data2",
-    description: "ExceptionsDetail"
-  }
+  reports: [
+    { typeName: "HosLog", fallback: "DutyStatusLog", sheetName: "Data1" },
+    { typeName: "ExceptionsDetail", sheetName: "Data2" }
+  ]
 };
 
-const ui = {
-  fileName: null,
-  datePreset: null,
-  fromDate: null,
-  toDate: null,
-  exceptionRuleSelect: null,
-  deviceSelect: null,
-  driverSelect: null,
-  loadFilterDataBtn: null,
-  buildSearchBtn: null,
-  clearSearchBtn: null,
-  testBtn: null,
-  runBtn: null,
-  status: null,
-  searchJson: null
-};
+const ui = {};
 
-// ── UI helpers ────────────────────────────────────────────
+// ── UI State Management ────────────────────────────────────────
 
-function setStatus(lines) {
-  ui.status.textContent = Array.isArray(lines) ? lines.join("\n") : String(lines);
+function setStatus(message) {
+  const lines = Array.isArray(message) ? message : [message];
+  ui.statusEl.textContent = lines.join("\n");
 }
 
 function setBusy(busy) {
   ui.testBtn.disabled = busy;
-  ui.runBtn.disabled = busy;
-  if (ui.buildSearchBtn) {
-    ui.buildSearchBtn.disabled = busy;
-  }
-  if (ui.clearSearchBtn) {
-    ui.clearSearchBtn.disabled = busy;
-  }
-  if (ui.loadFilterDataBtn) {
-    ui.loadFilterDataBtn.disabled = busy;
-  }
+  ui.exportBtn.disabled = busy;
+  if (ui.loadFilterBtn) ui.loadFilterBtn.disabled = busy;
+  if (ui.buildSearchBtn) ui.buildSearchBtn.disabled = busy;
+  if (ui.clearFilterBtn) ui.clearFilterBtn.disabled = busy;
 }
 
-function toInputDateTimeValue(date) {
+// ── Date/Time Utilities ────────────────────────────────────────
+
+function toInputDateValue(date) {
   const pad = (n) => String(n).padStart(2, "0");
-  return [
-    date.getUTCFullYear(),
-    "-",
-    pad(date.getUTCMonth() + 1),
-    "-",
-    pad(date.getUTCDate()),
-    "T",
-    pad(date.getUTCHours()),
-    ":",
-    pad(date.getUTCMinutes())
-  ].join("");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+}
+
+function toIsoDate(localDateTimeInput) {
+  if (!localDateTimeInput) return null;
+  const dt = new Date(localDateTimeInput);
+  return isNaN(dt.getTime()) ? null : dt.toISOString();
 }
 
 function applyDatePreset() {
   const now = new Date();
-  const end = new Date(now);
-  let start = null;
+  let start = new Date(now);
+  let end = new Date(now);
 
-  switch (ui.datePreset.value) {
-    case "today": {
+  switch (ui.presetSelect.value) {
+    case "today":
       start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59));
       break;
-    }
-    case "yesterday": {
+    case "yesterday":
       start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
-      end.setUTCFullYear(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-      end.setUTCHours(23, 59, 59, 0);
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 23, 59, 59));
       break;
-    }
-    case "last7": {
-      start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+    case "last7":
+      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       break;
-    }
-    case "last30": {
-      start = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    case "last30":
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       break;
-    }
-    case "monthToDate": {
-      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
-      break;
-    }
-    default: {
+    default:
       return;
-    }
   }
 
-  ui.fromDate.value = toInputDateTimeValue(start);
-  ui.toDate.value = toInputDateTimeValue(end);
+  ui.fromDateInput.value = toInputDateValue(start);
+  ui.toDateInput.value = toInputDateValue(end);
 }
 
-function resetSelectOptions(selectEl, emptyLabel) {
-  selectEl.innerHTML = "";
-  const defaultOption = document.createElement("option");
-  defaultOption.value = "";
-  defaultOption.textContent = emptyLabel;
-  selectEl.appendChild(defaultOption);
+// ── Filter Dropdowns ───────────────────────────────────────────
+
+function resetSelect(select, emptyLabel) {
+  select.innerHTML = `<option value="">${emptyLabel}</option>`;
 }
 
-function optionText(item, fallbackPrefix) {
-  if (item.name) {
-    return item.name;
-  }
-  if (item.firstName || item.lastName) {
-    const fullName = [item.firstName || "", item.lastName || ""].join(" ").trim();
-    if (fullName) {
-      return fullName;
-    }
-  }
-  return `${fallbackPrefix} ${item.id}`;
-}
-
-function fillSelect(selectEl, items, emptyLabel, fallbackPrefix) {
-  resetSelectOptions(selectEl, emptyLabel);
+function fillSelect(select, items, emptyLabel) {
+  resetSelect(select, emptyLabel);
   items.forEach((item) => {
-    if (!item || !item.id) {
-      return;
-    }
+    if (!item || !item.id) return;
     const opt = document.createElement("option");
     opt.value = item.id;
-    opt.textContent = optionText(item, fallbackPrefix);
-    selectEl.appendChild(opt);
+    opt.textContent = item.name || item.firstName || item.id;
+    select.appendChild(opt);
   });
 }
 
 async function loadFilterData() {
   setBusy(true);
   try {
-    setStatus("Loading filter dropdown data from Geotab...");
-
-    const [rulesResult, devicesResult, driversResult] = await Promise.all([
+    setStatus("Loading filter options from MyGeotab...");
+    const [rules, devices, drivers] = await Promise.all([
       callApi("Get", { typeName: "Rule", resultsLimit: 500 }),
       callApi("Get", { typeName: "Device", resultsLimit: 500 }),
       callApi("Get", { typeName: "User", search: { isDriver: true }, resultsLimit: 500 })
     ]);
 
-    const rules = Array.isArray(rulesResult) ? rulesResult : [];
-    const devices = Array.isArray(devicesResult) ? devicesResult : [];
-    const drivers = Array.isArray(driversResult) ? driversResult : [];
+    fillSelect(ui.ruleSelect, rules || [], "Any Exception Rule");
+    fillSelect(ui.deviceSelect, devices || [], "Any Asset");
+    fillSelect(ui.driverSelect, drivers || [], "Any Driver");
 
-    fillSelect(ui.exceptionRuleSelect, rules, "Any Exception Rule", "Rule");
-    fillSelect(ui.deviceSelect, devices, "Any Asset", "Asset");
-    fillSelect(ui.driverSelect, drivers, "Any Driver", "Driver");
-
-    setStatus([
-      "Filter dropdowns loaded.",
-      `Rules: ${rules.length}`,
-      `Assets: ${devices.length}`,
-      `Drivers: ${drivers.length}`
-    ]);
+    setStatus("Filter options loaded. Configure and click Test or Export.");
   } catch (err) {
-    setStatus([
-      "Could not load one or more dropdowns.",
-      err.message || String(err),
-      "You can still paste Search JSON manually."
-    ]);
+    setStatus(["Could not load filters.", err.message, "You can still use Search JSON."]);
   } finally {
     setBusy(false);
   }
 }
 
-function toIsoFromLocalDateTime(value) {
-  if (!value) {
-    return null;
-  }
-
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) {
-    return null;
-  }
-  return dt.toISOString();
+function getSelectedValues(select) {
+  return Array.from(select.options)
+    .filter((opt) => opt.selected && opt.value)
+    .map((opt) => opt.value);
 }
 
-function getSelectedValues(selectEl) {
-  const selected = [];
-  Array.from(selectEl.options).forEach((opt) => {
-    if (opt.selected && opt.value) {
-      selected.push(opt.value);
-    }
-  });
-  return selected;
-}
-
-function buildSearchFromFilters() {
-  const fromIso = toIsoFromLocalDateTime(ui.fromDate.value.trim());
-  const toIso = toIsoFromLocalDateTime(ui.toDate.value.trim());
-  const ruleIds = getSelectedValues(ui.exceptionRuleSelect);
-  const deviceIds = getSelectedValues(ui.deviceSelect);
-  const driverIds = getSelectedValues(ui.driverSelect);
-
-  if (!fromIso && !toIso && ruleIds.length === 0 && deviceIds.length === 0 && driverIds.length === 0) {
-    ui.searchJson.value = "";
-    setStatus([
-      "Filters cleared.",
-      "Search JSON is blank and no filter will be applied."
-    ]);
-    return;
-  }
+function buildSearch() {
+  const fromIso = toIsoDate(ui.fromDateInput.value);
+  const toIso = toIsoDate(ui.toDateInput.value);
+  const rules = getSelectedValues(ui.ruleSelect);
+  const devices = getSelectedValues(ui.deviceSelect);
+  const drivers = getSelectedValues(ui.driverSelect);
 
   const search = {};
-  if (fromIso) {
-    search.fromDate = fromIso;
-  }
-  if (toIso) {
-    search.toDate = toIso;
-  }
-  if (ruleIds.length > 0) {
-    search.ruleSearch = { id: ruleIds.length === 1 ? ruleIds[0] : ruleIds };
-  }
-  if (deviceIds.length > 0) {
-    search.deviceSearch = { id: deviceIds.length === 1 ? deviceIds[0] : deviceIds };
-  }
-  if (driverIds.length > 0) {
-    search.driverSearch = { id: driverIds.length === 1 ? driverIds[0] : driverIds };
-  }
+  if (fromIso) search.fromDate = fromIso;
+  if (toIso) search.toDate = toIso;
+  if (rules.length > 0) search.ruleSearch = { id: rules.length === 1 ? rules[0] : rules };
+  if (devices.length > 0) search.deviceSearch = { id: devices.length === 1 ? devices[0] : devices };
+  if (drivers.length > 0) search.driverSearch = { id: drivers.length === 1 ? drivers[0] : drivers };
 
-  ui.searchJson.value = JSON.stringify(search, null, 2);
-  setStatus([
-    "Search JSON updated from filters.",
-    "You can edit it manually before running Test or Export."
-  ]);
+  ui.searchJsonInput.value = JSON.stringify(search, null, 2);
+  setStatus("Search JSON built from filters.");
 }
 
 function clearFilters() {
-  ui.datePreset.value = "custom";
-  ui.fromDate.value = "";
-  ui.toDate.value = "";
-  Array.from(ui.exceptionRuleSelect.options).forEach((opt) => {
-    opt.selected = false;
-  });
-  Array.from(ui.deviceSelect.options).forEach((opt) => {
-    opt.selected = false;
-  });
-  Array.from(ui.driverSelect.options).forEach((opt) => {
-    opt.selected = false;
-  });
-  ui.searchJson.value = "";
-
-  setStatus([
-    "Filters reset.",
-    "Search JSON is now blank."
-  ]);
+  ui.presetSelect.value = "last7";
+  ui.fromDateInput.value = "";
+  ui.toDateInput.value = "";
+  Array.from(ui.ruleSelect.options).forEach((opt) => opt.selected = false);
+  Array.from(ui.deviceSelect.options).forEach((opt) => opt.selected = false);
+  Array.from(ui.driverSelect.options).forEach((opt) => opt.selected = false);
+  ui.searchJsonInput.value = "";
+  setStatus("Filters cleared.");
 }
 
-// ── API call via Geotab add-in session ───────────────────
+// ── API Calls ──────────────────────────────────────────────────
 
 function callApi(method, params) {
-  if (!runtime.api || typeof runtime.api.call !== "function") {
-    throw new Error(
-      "MyGeotab API is not available. " +
-      "Open this page as a registered add-in inside MyGeotab."
-    );
+  if (!runtime.api?.call) {
+    throw new Error("MyGeotab API not available. Open as add-in inside MyGeotab.");
   }
   return new Promise((resolve, reject) => {
     runtime.api.call(method, params, resolve, reject);
   });
 }
 
-// ── Input helpers ────────────────────────────────────────
-
-function getInputs() {
-  const raw = ui.searchJson.value.trim();
-  let search = {};
-  if (raw) {
-    try {
-      search = JSON.parse(raw);
-    } catch {
-      throw new Error("Search JSON is not valid JSON. Check your syntax.");
-    }
-  }
-
-  const fileName = ui.fileName.value.trim() || "geotab-dual-report.xlsx";
-  return { search, fileName };
-}
-
-// ── Flatten a row for Excel export ───────────────────────
+// ── Data Flattening ────────────────────────────────────────────
 
 function flattenRow(record) {
   const out = {};
@@ -316,81 +179,82 @@ function flattenRow(record) {
   return out;
 }
 
-// ── Excel export with template ───────────────────────────
+// ── Excel Export with Template ─────────────────────────────────
 
 async function exportToExcel(reportData, fileName) {
-  let wb;
-
-  // Fetch the hosted template
+  // Fetch template
+  setStatus("Loading template...");
+  let response;
   try {
-    setStatus("Loading Excel template...");
-    const response = await fetch(REPORT_CONFIG.templateUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    wb = XLSX.read(arrayBuffer, { type: "array" });
+    response = await fetch(CONFIG.templateUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
   } catch (err) {
-    throw new Error(`Failed to load template: ${err.message}`);
+    throw new Error(`Failed to fetch template: ${err.message}`);
   }
 
-  // Replace (or add) Data1 and Data2 sheets with report data
-  Object.entries(reportData).forEach(([sheetName, rows]) => {
-    const flat = rows.length > 0 ? rows.map(flattenRow) : [];
-    const ws = XLSX.utils.json_to_sheet(flat);
+  const arrayBuffer = await response.arrayBuffer();
+  const wb = XLSX.read(arrayBuffer, { type: "array" });
 
-    // Remove existing sheet with this name if present
-    const existingIdx = wb.SheetNames.indexOf(sheetName);
-    if (existingIdx !== -1) {
-      wb.SheetNames.splice(existingIdx, 1);
+  // Replace sheets
+  CONFIG.reports.forEach((report) => {
+    const sheetName = report.sheetName;
+    const rows = reportData[sheetName] || [];
+
+    // Remove old sheet if exists
+    const idx = wb.SheetNames.indexOf(sheetName);
+    if (idx !== -1) {
+      wb.SheetNames.splice(idx, 1);
       delete wb.Sheets[sheetName];
     }
 
-    // Append the new sheet
+    // Add new sheet with flattened data
+    const flat = rows.map(flattenRow);
+    const ws = XLSX.utils.json_to_sheet(flat);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
+  // Write file
   XLSX.writeFile(wb, fileName);
 }
 
-// ── Test: pull 1 row from each report ───────────────────
+// ── Test: Pull 1 row from each report ──────────────────────────
 
 async function testConnection() {
   setBusy(true);
   try {
-    const { search } = getInputs();
-    setStatus("Testing — pulling 1 row from each report...");
+    const raw = ui.searchJsonInput.value.trim();
+    let search = {};
+    if (raw) search = JSON.parse(raw);
 
-    const tests = [];
+    setStatus("Testing... pulling 1 row from each report.");
+
     const results = {};
-
-    // Test Report 1 (HosLog with fallback)
-    try {
-      let result = await callApi("Get", { typeName: REPORT_CONFIG.report1.typeName, search, resultsLimit: 1 });
-      tests.push(`${REPORT_CONFIG.report1.description}: 1 row`);
-      results.report1 = Array.isArray(result) ? result : [];
-    } catch (err) {
-      // Fallback to DutyStatusLog
-      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.fallbackTypeName, search, resultsLimit: 1 });
-      tests.push(`${REPORT_CONFIG.report1.fallbackTypeName}: 1 row (HosLog fallback)");
-      results.report1 = Array.isArray(result) ? result : [];
+    for (const report of CONFIG.reports) {
+      try {
+        const data = await callApi("Get", { typeName: report.typeName, search, resultsLimit: 1 });
+        results[report.sheetName] = Array.isArray(data) ? data : [];
+      } catch (err) {
+        if (report.fallback) {
+          setStatus(`${report.typeName} failed, trying ${report.fallback}...`);
+          const data = await callApi("Get", { typeName: report.fallback, search, resultsLimit: 1 });
+          results[report.sheetName] = Array.isArray(data) ? data : [];
+        } else {
+          throw err;
+        }
+      }
     }
 
-    // Test Report 2
-    const result2 = await callApi("Get", { typeName: REPORT_CONFIG.report2.typeName, search, resultsLimit: 1 });
-    tests.push(`${REPORT_CONFIG.report2.description}: 1 row`);
-    results.report2 = Array.isArray(result2) ? result2 : [];
-
-    const statusLines = ["Test OK — API calls succeeded.", ...tests];
-
-    Object.entries(results).forEach(([key, rows]) => {
+    const lines = ["Test successful."];
+    Object.entries(results).forEach(([sheet, rows]) => {
       if (rows.length > 0) {
         const cols = Object.keys(flattenRow(rows[0]));
-        statusLines.push(`${key === "report1" ? "Report 1" : "Report 2"} columns (${cols.length}): ${cols.join(", ")}`);
+        lines.push(`${sheet}: ${rows.length} row, ${cols.length} columns`);
+      } else {
+        lines.push(`${sheet}: 0 rows`);
       }
     });
 
-    setStatus(statusLines);
+    setStatus(lines);
   } catch (err) {
     setStatus(["Test failed.", err.message || String(err)]);
   } finally {
@@ -398,56 +262,50 @@ async function testConnection() {
   }
 }
 
-// ── Run: pull all rows from both reports and export ───────
+// ── Export: Pull all rows and merge with template ──────────────
 
 async function runExport() {
   setBusy(true);
   try {
-    const { search, fileName } = getInputs();
+    const raw = ui.searchJsonInput.value.trim();
+    let search = {};
+    if (raw) search = JSON.parse(raw);
+
+    const fileName = ui.fileNameInput.value.trim() || "geotab-export.xlsx";
+
+    setStatus("Pulling reports...");
+
     const reportData = {};
-    const rowCounts = {};
-
-    // Pull Report 1 (HosLog with fallback)
-    setStatus("Pulling Report 1 (HosLog)...");
-    let report1TypeUsed = REPORT_CONFIG.report1.typeName;
-    try {
-      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.typeName, search });
-      reportData[REPORT_CONFIG.report1.sheetName] = Array.isArray(result) ? result : [];
-    } catch (err) {
-      // Fallback to DutyStatusLog
-      setStatus("HosLog not available, falling back to DutyStatusLog...");
-      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.fallbackTypeName, search });
-      reportData[REPORT_CONFIG.report1.sheetName] = Array.isArray(result) ? result : [];
-      report1TypeUsed = REPORT_CONFIG.report1.fallbackTypeName;
+    for (const report of CONFIG.reports) {
+      try {
+        const data = await callApi("Get", { typeName: report.typeName, search });
+        reportData[report.sheetName] = Array.isArray(data) ? data : [];
+      } catch (err) {
+        if (report.fallback) {
+          setStatus(`${report.typeName} not available, using ${report.fallback}...`);
+          const data = await callApi("Get", { typeName: report.fallback, search });
+          reportData[report.sheetName] = Array.isArray(data) ? data : [];
+        } else {
+          throw err;
+        }
+      }
     }
-    rowCounts["Report 1"] = reportData[REPORT_CONFIG.report1.sheetName].length;
 
-    // Pull Report 2
-    setStatus("Pulling Report 2 (ExceptionsDetail)...");
-    const result2 = await callApi("Get", { typeName: REPORT_CONFIG.report2.typeName, search });
-    reportData[REPORT_CONFIG.report2.sheetName] = Array.isArray(result2) ? result2 : [];
-    rowCounts["Report 2"] = reportData[REPORT_CONFIG.report2.sheetName].length;
-
-    const totalRows = Object.values(rowCounts).reduce((a, b) => a + b, 0);
+    const totalRows = Object.values(reportData).reduce((sum, rows) => sum + rows.length, 0);
     if (totalRows === 0) {
-      setStatus([
-        "API calls succeeded but returned 0 rows total.",
-        "Try broadening your Search JSON or leaving it blank."
-      ]);
+      setStatus("No data returned. Try broadening your search filters.");
       return;
     }
 
-    setStatus(`Received ${totalRows} total rows. Loading template and exporting to Excel...`);
+    setStatus(`Received ${totalRows} rows. Merging with template and exporting...`);
     await exportToExcel(reportData, fileName);
 
-    const statusLines = [
-      "Export complete.",
-      `Report 1 (${report1TypeUsed}): ${rowCounts["Report 1"]} rows`,
-      `Report 2 (${REPORT_CONFIG.report2.typeName}): ${rowCounts["Report 2"]} rows`,
-      `Total: ${totalRows} rows`,
-      `File: ${fileName}`
-    ];
-    setStatus(statusLines);
+    const lines = ["Export complete."];
+    Object.entries(reportData).forEach(([sheet, rows]) => {
+      lines.push(`${sheet}: ${rows.length} rows`);
+    });
+    lines.push(`File: ${fileName}`);
+    setStatus(lines);
   } catch (err) {
     setStatus(["Export failed.", err.message || String(err)]);
   } finally {
@@ -455,84 +313,52 @@ async function runExport() {
   }
 }
 
-// ── Add-in lifecycle ─────────────────────────────────────
+// ── Initialization ─────────────────────────────────────────────
 
-function onReady(api) {
-  runtime.api = api;
-
-  ui.searchJson = document.getElementById("searchJson");
-  ui.fileName  = document.getElementById("fileName");
-  ui.datePreset = document.getElementById("datePreset");
-  ui.fromDate  = document.getElementById("fromDate");
-  ui.toDate    = document.getElementById("toDate");
-  ui.exceptionRuleSelect = document.getElementById("exceptionRuleSelect");
+function initUI() {
+  ui.fileNameInput = document.getElementById("fileName");
+  ui.presetSelect = document.getElementById("presetSelect");
+  ui.fromDateInput = document.getElementById("fromDate");
+  ui.toDateInput = document.getElementById("toDate");
+  ui.ruleSelect = document.getElementById("ruleSelect");
   ui.deviceSelect = document.getElementById("deviceSelect");
   ui.driverSelect = document.getElementById("driverSelect");
-  ui.loadFilterDataBtn = document.getElementById("loadFilterDataBtn");
+  ui.searchJsonInput = document.getElementById("searchJson");
+  ui.loadFilterBtn = document.getElementById("loadFilterBtn");
   ui.buildSearchBtn = document.getElementById("buildSearchBtn");
-  ui.clearSearchBtn = document.getElementById("clearSearchBtn");
-  ui.testBtn   = document.getElementById("testBtn");
-  ui.runBtn    = document.getElementById("runBtn");
-  ui.status    = document.getElementById("status");
+  ui.clearFilterBtn = document.getElementById("clearFilterBtn");
+  ui.testBtn = document.getElementById("testBtn");
+  ui.exportBtn = document.getElementById("exportBtn");
+  ui.statusEl = document.getElementById("status");
 
-  ui.datePreset.addEventListener("change", applyDatePreset);
-  ui.loadFilterDataBtn.addEventListener("click", loadFilterData);
-  ui.buildSearchBtn.addEventListener("click", buildSearchFromFilters);
-  ui.clearSearchBtn.addEventListener("click", clearFilters);
-  ui.testBtn.addEventListener("click", testConnection);
-  ui.runBtn.addEventListener("click", runExport);
+  ui.presetSelect?.addEventListener("change", applyDatePreset);
+  ui.loadFilterBtn?.addEventListener("click", loadFilterData);
+  ui.buildSearchBtn?.addEventListener("click", buildSearch);
+  ui.clearFilterBtn?.addEventListener("click", clearFilters);
+  ui.testBtn?.addEventListener("click", testConnection);
+  ui.exportBtn?.addEventListener("click", runExport);
 
   setBusy(false);
-  setStatus(["Ready. Configure filters and click Test or Pull Reports & Export.",
-    "Report 1: HosLog (or DutyStatusLog fallback) → Data1 sheet",
-    "Report 2: ExceptionsDetail → Data2 sheet"]);
   applyDatePreset();
-  loadFilterData();
+  setStatus("Ready. Load filters or enter Search JSON, then click Test or Export.");
 }
 
-function onStandalone() {
-  ui.searchJson = document.getElementById("searchJson");
-  ui.fileName  = document.getElementById("fileName");
-  ui.datePreset = document.getElementById("datePreset");
-  ui.fromDate  = document.getElementById("fromDate");
-  ui.toDate    = document.getElementById("toDate");
-  ui.exceptionRuleSelect = document.getElementById("exceptionRuleSelect");
-  ui.deviceSelect = document.getElementById("deviceSelect");
-  ui.driverSelect = document.getElementById("driverSelect");
-  ui.loadFilterDataBtn = document.getElementById("loadFilterDataBtn");
-  ui.buildSearchBtn = document.getElementById("buildSearchBtn");
-  ui.clearSearchBtn = document.getElementById("clearSearchBtn");
-  ui.testBtn   = document.getElementById("testBtn");
-  ui.runBtn    = document.getElementById("runBtn");
-  ui.status    = document.getElementById("status");
+// ── Geotab Add-in Entry Point ──────────────────────────────────
 
-  setBusy(true);
-  setStatus(
-    "No MyGeotab session detected.\n" +
-    "Open this page as a registered add-in inside MyGeotab."
-  );
-}
-
-// Standalone fallback (direct browser open)
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", onStandalone);
-} else {
-  onStandalone();
-}
-
-// Geotab Add-In entry point
 window.geotab = window.geotab || {};
 window.geotab.addin = window.geotab.addin || {};
-window.geotab.addin.reportExport = function (api) {
+window.geotab.addin.dualReportExport = function (api) {
   return {
     initialize(freshApi, state, callback) {
-      onReady(freshApi || api);
+      runtime.api = freshApi || api;
+      initUI();
+      if (runtime.api?.call) {
+        loadFilterData();
+      }
       callback();
     },
     focus(freshApi, state, callback) {
-      if (freshApi || api) {
-        runtime.api = freshApi || api;
-      }
+      if (freshApi || api) runtime.api = freshApi || api;
       callback();
     },
     blur() {},
@@ -541,3 +367,14 @@ window.geotab.addin.reportExport = function (api) {
     }
   };
 };
+
+// Standalone fallback
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    initUI();
+    setStatus("Open this page as an add-in inside MyGeotab.");
+  });
+} else {
+  initUI();
+  setStatus("Open this page as an add-in inside MyGeotab.");
+}

@@ -1,51 +1,41 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Geotab Report Export</title>
+  <title>Geotab Dual Report Export</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <main class="container">
     <h1>Geotab Dual Report Export</h1>
-    <p class=\"subtitle\">Pull two reports from MyGeotab (HosLog + ExceptionsDetail) and export to separate sheets in Excel.</p>
+    <p class="subtitle">Pull HosLog and ExceptionsDetail reports, merge with template, export to Excel.</p>
 
-    <section class=\"card\">
+    <section class="card">
       <h2>Export Settings</h2>
-      <div class=\"grid two-col\">
-        <label>
-          Output File Name
-          <input id=\"fileName\" value=\"geotab-dual-report.xlsx\" />
-        </label>
-      </div>
       <label>
-        Search JSON <span class="hint">(optional — leave blank for no filter)</span>
-        <textarea id="searchJson" rows="4" placeholder='{"fromDate": "2026-04-01T00:00:00Z", "toDate": "2026-04-08T00:00:00Z"}'></textarea>
+        Output File Name
+        <input id="fileName" type="text" value="geotab-export.xlsx" />
       </label>
+    </section>
 
-      <h2>Search Filter Builder</h2>
-      <p class="hint">Build Search JSON with date range and optional exception, asset, and driver filters.</p>
+    <section class="card">
+      <h2>Search Filters</h2>
+      
       <div class="grid two-col">
         <label>
-          Date Range Preset
-          <select id="datePreset">
+          Date Preset
+          <select id="presetSelect">
             <option value="custom">Custom</option>
             <option value="today">Today (UTC)</option>
             <option value="yesterday">Yesterday (UTC)</option>
             <option value="last7" selected>Last 7 Days (UTC)</option>
             <option value="last30">Last 30 Days (UTC)</option>
-            <option value="monthToDate">Month to Date (UTC)</option>
-          </select>
-        </label>
-        <label>
-          Exception Rule (optional — hold Ctrl/Cmd to multi-select)
-          <select id="exceptionRuleSelect" multiple>
-            <option value="">Any Exception Rule</option>
           </select>
         </label>
       </div>
+
       <div class="grid two-col">
         <label>
           From Date/Time (UTC)
@@ -56,35 +46,43 @@
           <input id="toDate" type="datetime-local" />
         </label>
       </div>
+
       <div class="grid two-col">
         <label>
-          Asset (optional — hold Ctrl/Cmd to multi-select)
-          <select id="deviceSelect" multiple>
-            <option value="">Any Asset</option>
-          </select>
+          Exception Rule (hold Ctrl to multi-select)
+          <select id="ruleSelect" multiple></select>
         </label>
         <label>
-          Driver (optional — hold Ctrl/Cmd to multi-select)
-          <select id="driverSelect" multiple>
-            <option value="">Any Driver</option>
-          </select>
+          Asset (hold Ctrl to multi-select)
+          <select id="deviceSelect" multiple></select>
         </label>
       </div>
+
+      <label>
+        Driver (hold Ctrl to multi-select)
+        <select id="driverSelect" multiple></select>
+      </label>
+
       <div class="actions inline-actions">
-        <button id="loadFilterDataBtn" type="button" class="secondary">Refresh Dropdown Data</button>
+        <button id="loadFilterBtn" type="button" class="secondary">Refresh Dropdown Data</button>
         <button id="buildSearchBtn" type="button">Build Search JSON</button>
-        <button id="clearSearchBtn" type="button" class="secondary">Clear Filters</button>
+        <button id="clearFilterBtn" type="button" class="secondary">Clear Filters</button>
       </div>
     </section>
 
+    <section class="card">
+      <h2>Search JSON (Advanced)</h2>
+      <textarea id="searchJson" rows="4" placeholder='{"fromDate": "2026-01-01T00:00:00Z", "toDate": "2026-01-08T00:00:00Z"}'></textarea>
+    </section>
+
     <div class="actions">
-      <button id=\"testBtn\" type=\"button\">Test (1 row per report)</button>
-      <button id=\"runBtn\" type=\"button\">Pull Reports &amp; Export Excel</button>
+      <button id="testBtn" type="button">Test (1 row per report)</button>
+      <button id="exportBtn" type="button">Pull Reports & Export Excel</button>
     </div>
 
     <section class="card">
       <h2>Status</h2>
-      <pre id="status">Open this page inside MyGeotab as a registered add-in.</pre>
+      <pre id="status">Loading...</pre>
     </section>
   </main>
 

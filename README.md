@@ -1,36 +1,44 @@
 # Geotab Dual Report Export Add-In
 
-This add-in runs inside MyGeotab and uses the current signed-in user session (`api.call`) to:
+A clean, simple add-in that runs inside MyGeotab to:
 
-1. Pull two fixed report datasets.
-2. Export each to a separate Excel sheet.
-3. No merging — just data placement on separate tabs.
+1. **Pull two fixed reports** — HosLog and ExceptionsDetail
+2. **Merge with an Excel template** — loads your template from GitHub Pages
+3. **Replace data sheets** — Data1 and Data2 sheets get fresh data
+4. **Export the final file** — download as a single Excel workbook
 
-## Reports
+## How It Works
 
-- **Report 1 (Data1 sheet)**: `HosLog` custom report (falls back to `DutyStatusLog` if unavailable)
-- **Report 2 (Data2 sheet)**: `ExceptionsDetail` custom report
-
-Both reports are pulled with the same search criteria (date range, filters, etc.) and placed on their own tabs with all fields included.
+- Fetches your hosted Excel template from `https://mgranados-gl.github.io/geotab-report-merge/template/Gridline%20_%20Driver%20Events%20(Yesterday).xlsx`
+- Pulls both reports using the same search criteria (date range, filters)
+- Flattens all fields and replaces the `Data1` and `Data2` sheets in the template
+- Keeps all other template sheets intact (summary, charts, etc.)
+- Exports the merged workbook to download
 
 ## Setup
 
-1. Host this folder on HTTPS.
-2. Register the hosted `index.html` as a MyGeotab add-in.
-3. Open the add-in from MyGeotab (not directly in browser).
-4. Pick date range and output filename.
-5. Click **Test (1 row per report)**, then **Pull Reports & Export Excel**.
+1. Host this folder on HTTPS (GitHub Pages recommended)
+2. Register the hosted `index.html` as a MyGeotab add-in
+3. Open the add-in from within MyGeotab
+4. Configure filters or enter Search JSON
+5. Click **Test** to verify, then **Pull Reports & Export Excel**
 
-## Important
+## Reports
 
-- This build does **not** use manual username/password fields.
-- If you open `index.html` directly, buttons are disabled by design.
-- If `HosLog` fails in your database, it automatically falls back to `DutyStatusLog`.
+- **Data1 sheet**: HosLog (or DutyStatusLog if HosLog unavailable)
+- **Data2 sheet**: ExceptionsDetail
+
+All fields from both reports are included.
 
 ## Customize
 
-Edit `REPORT_CONFIG` in [app.js](app.js) to:
+Edit `CONFIG` in [app.js](app.js):
+- `templateUrl` — change the hosted template URL
+- `reports[].typeName` — change report type names
+- `reports[].sheetName` — change sheet names in output
 
-- Change sheet names (`sheetName` properties)
-- Change report type names (`typeName`, `fallbackTypeName`)
-- Modify search criteria via the UI's filter builder
+## Notes
+
+- Requires MyGeotab add-in session (no password needed)
+- Buttons disabled if opened directly in browser
+- HosLog auto-falls back to DutyStatusLog if unavailable
