@@ -9,14 +9,24 @@
 
 body {
   margin: 0;
-  background: #f4f6f8;
+  background: #ffe6cc;
   color: #1f2937;
+}
+
+.beta-banner {
+  background: #ff9d3d;
+  color: #fff;
+  padding: 16px 20px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .container {
   max-width: 980px;
-  margin: 24px auto;
-  padding: 0 16px 24px;
+  margin: 0 auto;
+  padding: 24px 16px;
 }
 
 h1 {
