@@ -89,19 +89,30 @@ async function loadFilterData() {
   setBusy(true);
   try {
     setStatus("Loading filter options from MyGeotab...");
-    const [rules, devices, drivers] = await Promise.all([
-      callApi("Get", { typeName: "Rule", resultsLimit: 500 }),
-      callApi("Get", { typeName: "Device", resultsLimit: 500 }),
-      callApi("Get", { typeName: "User", search: { isDriver: true }, resultsLimit: 500 })
+    
+    const rulesData = await callApi("Get", { typeName: "Rule", resultsLimit: 500 });
+    const deviceData = await callApi("Get", { typeName: "Device", resultsLimit: 500 });
+    const driverData = await callApi("Get", { typeName: "User", search: { isDriver: true }, resultsLimit: 500 });
+
+    const rules = Array.isArray(rulesData) ? rulesData : [];
+    const devices = Array.isArray(deviceData) ? deviceData : [];
+    const drivers = Array.isArray(driverData) ? driverData : [];
+
+    fillSelect(ui.ruleSelect, rules, "Any Exception Rule");
+    fillSelect(ui.deviceSelect, devices, "Any Asset");
+    fillSelect(ui.driverSelect, drivers, "Any Driver");
+
+    setStatus([
+      "✓ Filter options loaded successfully.",
+      `Rules: ${rules.length} | Assets: ${devices.length} | Drivers: ${drivers.length}`
     ]);
-
-    fillSelect(ui.ruleSelect, rules || [], "Any Exception Rule");
-    fillSelect(ui.deviceSelect, devices || [], "Any Asset");
-    fillSelect(ui.driverSelect, drivers || [], "Any Driver");
-
-    setStatus("Filter options loaded. Configure and click Test or Export.");
   } catch (err) {
-    setStatus(["Could not load filters.", err.message, "You can still use Search JSON."]);
+    setStatus([
+      "✗ Could not load filters.",
+      `Error: ${err.message || err}`,
+      "Check: Are you running this inside MyGeotab as an add-in?",
+      "You can still type Search JSON manually."
+    ]);
   } finally {
     setBusy(false);
   }
