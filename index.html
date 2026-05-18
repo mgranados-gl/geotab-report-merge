@@ -9,19 +9,15 @@
 </head>
 <body>
   <main class="container">
-    <h1>Geotab Report Export</h1>
-    <p class="subtitle">Pull a single report from MyGeotab and export it to Excel.</p>
+    <h1>Geotab Dual Report Export</h1>
+    <p class=\"subtitle\">Pull two reports from MyGeotab (HosLog + ExceptionsDetail) and export to separate sheets in Excel.</p>
 
-    <section class="card">
-      <h2>Report</h2>
-      <div class="grid two-col">
-        <label>
-          Type Name
-          <input id="typeName" value="ExceptionEvent" placeholder="e.g. ExceptionEvent" />
-        </label>
+    <section class=\"card\">
+      <h2>Export Settings</h2>
+      <div class=\"grid two-col\">
         <label>
           Output File Name
-          <input id="fileName" value="geotab-report.xlsx" />
+          <input id=\"fileName\" value=\"geotab-dual-report.xlsx\" />
         </label>
       </div>
       <label>
@@ -82,8 +78,8 @@
     </section>
 
     <div class="actions">
-      <button id="testBtn" type="button">Test (1 row)</button>
-      <button id="runBtn" type="button">Pull Report &amp; Export Excel</button>
+      <button id=\"testBtn\" type=\"button\">Test (1 row per report)</button>
+      <button id=\"runBtn\" type=\"button\">Pull Reports &amp; Export Excel</button>
     </div>
 
     <section class="card">

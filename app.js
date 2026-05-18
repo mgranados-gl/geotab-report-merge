@@ -1,10 +1,23 @@
-/* ── Geotab Add-In: single report pull + Excel export ── */
+/* ── Geotab Add-In: dual report pull + multi-sheet Excel export ── */
 
 const runtime = { api: null };
 
+const REPORT_CONFIG = {
+  templateUrl: "https://mgranados-gl.github.io/geotab-report-merge/Gridline%20_%20Driver%20Events%20(Yesterday).xlsx",
+  report1: {
+    typeName: "HosLog",
+    fallbackTypeName: "DutyStatusLog",
+    sheetName: "Data1",
+    description: "HosLog"
+  },
+  report2: {
+    typeName: "ExceptionsDetail",
+    sheetName: "Data2",
+    description: "ExceptionsDetail"
+  }
+};
+
 const ui = {
-  typeName: null,
-  searchJson: null,
   fileName: null,
   datePreset: null,
   fromDate: null,
@@ -17,7 +30,8 @@ const ui = {
   clearSearchBtn: null,
   testBtn: null,
   runBtn: null,
-  status: null
+  status: null,
+  searchJson: null
 };
 
 // ── UI helpers ────────────────────────────────────────────
@@ -262,11 +276,6 @@ function callApi(method, params) {
 // ── Input helpers ────────────────────────────────────────
 
 function getInputs() {
-  const typeName = ui.typeName.value.trim();
-  if (!typeName) {
-    throw new Error("Type Name is required.");
-  }
-
   const raw = ui.searchJson.value.trim();
   let search = {};
   if (raw) {
@@ -277,8 +286,8 @@ function getInputs() {
     }
   }
 
-  const fileName = ui.fileName.value.trim() || "geotab-report.xlsx";
-  return { typeName, search, fileName };
+  const fileName = ui.fileName.value.trim() || "geotab-dual-report.xlsx";
+  return { search, fileName };
 }
 
 // ── Flatten a row for Excel export ───────────────────────
@@ -307,41 +316,81 @@ function flattenRow(record) {
   return out;
 }
 
-// ── Excel export ─────────────────────────────────────────
+// ── Excel export with template ───────────────────────────
 
-function exportToExcel(rows, fileName) {
-  const flat = rows.map(flattenRow);
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(flat);
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
+async function exportToExcel(reportData, fileName) {
+  let wb;
+
+  // Fetch the hosted template
+  try {
+    setStatus("Loading Excel template...");
+    const response = await fetch(REPORT_CONFIG.templateUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    wb = XLSX.read(arrayBuffer, { type: "array" });
+  } catch (err) {
+    throw new Error(`Failed to load template: ${err.message}`);
+  }
+
+  // Replace (or add) Data1 and Data2 sheets with report data
+  Object.entries(reportData).forEach(([sheetName, rows]) => {
+    const flat = rows.length > 0 ? rows.map(flattenRow) : [];
+    const ws = XLSX.utils.json_to_sheet(flat);
+
+    // Remove existing sheet with this name if present
+    const existingIdx = wb.SheetNames.indexOf(sheetName);
+    if (existingIdx !== -1) {
+      wb.SheetNames.splice(existingIdx, 1);
+      delete wb.Sheets[sheetName];
+    }
+
+    // Append the new sheet
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
   XLSX.writeFile(wb, fileName);
 }
 
-// ── Test: pull 1 row ─────────────────────────────────────
+// ── Test: pull 1 row from each report ───────────────────
 
 async function testConnection() {
   setBusy(true);
   try {
-    const { typeName, search } = getInputs();
-    setStatus(`Testing — pulling 1 row from "${typeName}"...`);
+    const { search } = getInputs();
+    setStatus("Testing — pulling 1 row from each report...");
 
-    const result = await callApi("Get", { typeName, search, resultsLimit: 1 });
-    const rows = Array.isArray(result) ? result : [];
+    const tests = [];
+    const results = {};
 
-    if (rows.length === 0) {
-      setStatus([
-        "Test OK — API call succeeded.",
-        `Type "${typeName}" returned 0 rows for the given search.`,
-        "Try broadening your Search JSON or leaving it blank."
-      ]);
-    } else {
-      const cols = Object.keys(flattenRow(rows[0]));
-      setStatus([
-        "Test OK — 1 row received.",
-        `Type: ${typeName}`,
-        `Columns: ${cols.join(", ")}`
-      ]);
+    // Test Report 1 (HosLog with fallback)
+    try {
+      let result = await callApi("Get", { typeName: REPORT_CONFIG.report1.typeName, search, resultsLimit: 1 });
+      tests.push(`${REPORT_CONFIG.report1.description}: 1 row`);
+      results.report1 = Array.isArray(result) ? result : [];
+    } catch (err) {
+      // Fallback to DutyStatusLog
+      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.fallbackTypeName, search, resultsLimit: 1 });
+      tests.push(`${REPORT_CONFIG.report1.fallbackTypeName}: 1 row (HosLog fallback)");
+      results.report1 = Array.isArray(result) ? result : [];
     }
+
+    // Test Report 2
+    const result2 = await callApi("Get", { typeName: REPORT_CONFIG.report2.typeName, search, resultsLimit: 1 });
+    tests.push(`${REPORT_CONFIG.report2.description}: 1 row`);
+    results.report2 = Array.isArray(result2) ? result2 : [];
+
+    const statusLines = ["Test OK — API calls succeeded.", ...tests];
+
+    Object.entries(results).forEach(([key, rows]) => {
+      if (rows.length > 0) {
+        const cols = Object.keys(flattenRow(rows[0]));
+        statusLines.push(`${key === "report1" ? "Report 1" : "Report 2"} columns (${cols.length}): ${cols.join(", ")}`);
+      }
+    });
+
+    setStatus(statusLines);
   } catch (err) {
     setStatus(["Test failed.", err.message || String(err)]);
   } finally {
@@ -349,34 +398,56 @@ async function testConnection() {
   }
 }
 
-// ── Run: pull all rows and export ────────────────────────
+// ── Run: pull all rows from both reports and export ───────
 
 async function runExport() {
   setBusy(true);
   try {
-    const { typeName, search, fileName } = getInputs();
-    setStatus(`Pulling all rows from "${typeName}"...`);
+    const { search, fileName } = getInputs();
+    const reportData = {};
+    const rowCounts = {};
 
-    const result = await callApi("Get", { typeName, search });
-    const rows = Array.isArray(result) ? result : [];
+    // Pull Report 1 (HosLog with fallback)
+    setStatus("Pulling Report 1 (HosLog)...");
+    let report1TypeUsed = REPORT_CONFIG.report1.typeName;
+    try {
+      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.typeName, search });
+      reportData[REPORT_CONFIG.report1.sheetName] = Array.isArray(result) ? result : [];
+    } catch (err) {
+      // Fallback to DutyStatusLog
+      setStatus("HosLog not available, falling back to DutyStatusLog...");
+      const result = await callApi("Get", { typeName: REPORT_CONFIG.report1.fallbackTypeName, search });
+      reportData[REPORT_CONFIG.report1.sheetName] = Array.isArray(result) ? result : [];
+      report1TypeUsed = REPORT_CONFIG.report1.fallbackTypeName;
+    }
+    rowCounts["Report 1"] = reportData[REPORT_CONFIG.report1.sheetName].length;
 
-    if (rows.length === 0) {
+    // Pull Report 2
+    setStatus("Pulling Report 2 (ExceptionsDetail)...");
+    const result2 = await callApi("Get", { typeName: REPORT_CONFIG.report2.typeName, search });
+    reportData[REPORT_CONFIG.report2.sheetName] = Array.isArray(result2) ? result2 : [];
+    rowCounts["Report 2"] = reportData[REPORT_CONFIG.report2.sheetName].length;
+
+    const totalRows = Object.values(rowCounts).reduce((a, b) => a + b, 0);
+    if (totalRows === 0) {
       setStatus([
-        "API call succeeded but returned 0 rows.",
+        "API calls succeeded but returned 0 rows total.",
         "Try broadening your Search JSON or leaving it blank."
       ]);
       return;
     }
 
-    setStatus(`Received ${rows.length} rows. Exporting to Excel...`);
-    exportToExcel(rows, fileName);
+    setStatus(`Received ${totalRows} total rows. Loading template and exporting to Excel...`);
+    await exportToExcel(reportData, fileName);
 
-    setStatus([
+    const statusLines = [
       "Export complete.",
-      `Type: ${typeName}`,
-      `Rows: ${rows.length}`,
+      `Report 1 (${report1TypeUsed}): ${rowCounts["Report 1"]} rows`,
+      `Report 2 (${REPORT_CONFIG.report2.typeName}): ${rowCounts["Report 2"]} rows`,
+      `Total: ${totalRows} rows`,
       `File: ${fileName}`
-    ]);
+    ];
+    setStatus(statusLines);
   } catch (err) {
     setStatus(["Export failed.", err.message || String(err)]);
   } finally {
@@ -389,7 +460,6 @@ async function runExport() {
 function onReady(api) {
   runtime.api = api;
 
-  ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
   ui.datePreset = document.getElementById("datePreset");
@@ -413,13 +483,14 @@ function onReady(api) {
   ui.runBtn.addEventListener("click", runExport);
 
   setBusy(false);
-  setStatus("Ready. Enter a Type Name and click Test or Pull Report.");
+  setStatus(["Ready. Configure filters and click Test or Pull Reports & Export.",
+    "Report 1: HosLog (or DutyStatusLog fallback) → Data1 sheet",
+    "Report 2: ExceptionsDetail → Data2 sheet"]);
   applyDatePreset();
   loadFilterData();
 }
 
 function onStandalone() {
-  ui.typeName  = document.getElementById("typeName");
   ui.searchJson = document.getElementById("searchJson");
   ui.fileName  = document.getElementById("fileName");
   ui.datePreset = document.getElementById("datePreset");
