@@ -3,7 +3,7 @@
 const runtime = { api: null };
 
 const REPORT_CONFIG = {
-  templateUrl: "https://mgranados-gl.github.io/geotab-report-merge/Gridline%20_%20Driver%20Events%20(Yesterday).xlsx",
+  templateUrl: "https://mgranados-gl.github.io/geotab-report-merge/template/Gridline%20_%20Driver%20Events%20(Yesterday).xlsx",
   report1: {
     typeName: "HosLog",
     fallbackTypeName: "DutyStatusLog",
