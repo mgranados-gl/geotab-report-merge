@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geotab Add-In: Dual Report Merge</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/xlsx-populate/browser/xlsx-populate.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-mark">G</div>
+      <div class="brand-copy">
+        <h1>Dual Report Merge</h1>
+        <p>ExceptionsDetail + HOSLog into template</p>
+      </div>
+      <div class="env-pill" id="envPill">Standalone</div>
+    </header>
+    <main class="content-grid">
+      <section class="panel">
+        <h2>Filters</h2>
+        <div class="field-grid">
+          <label class="field">
+            <span>Date Preset</span>
+            <select id="datePreset">
+              <option value="today">Today</option>
+              <option value="last7" selected>Last 7 days</option>
+              <option value="last30">Last 30 days</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>From</span>
+            <input id="fromDate" type="date" />
+          </label>
+          <label class="field">
+            <span>To</span>
+            <input id="toDate" type="date" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Target Groups</span>
+          <select id="groupSelect" multiple size="8"></select>
+          <small>Use Ctrl/Cmd click to select multiple groups.</small>
+        </label>
+      </section>
+      <section class="panel">
+        <h2>Report Settings</h2>
+        <div class="sub-panel">
+          <h3>ExceptionsDetail</h3>
+          <div class="field-grid">
+            <label class="field">
+              <span>Exception Rule (optional)</span>
+              <select id="exceptionRuleSelect">
+                <option value="">All rules</option>
+              </select>
+            </label>
+            <label class="field checkbox-field">
+              <input id="includeAcknowledged" type="checkbox" checked />
+              <span>Include acknowledged</span>
+            </label>
+          </div>
+        </div>
+        <div class="sub-panel">
+          <h3>HOSLog</h3>
+          <div class="field-grid">
+            <label class="field">
+              <span>Status Filter</span>
+              <select id="hosStatusFilter">
+                <option value="">All statuses</option>
+                <option value="off">Off Duty</option>
+                <option value="sb">Sleeper Berth</option>
+                <option value="d">Driving</option>
+                <option value="on">On Duty</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Template & Export</h2>
+        <div class="field-grid">
+          <label class="field">
+            <span>Template Workbook</span>
+            <input id="templateFile" type="file" accept=".xlsx" />
+            <small>Optional if template.xlsx is present in the repo root.</small>
+          </label>
+          <label class="field">
+            <span>Output File Name</span>
+            <input id="outputFileName" type="text" value="Geotab-Report-Merge.xlsx" />
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="loadMetaBtn" class="btn secondary">Reload Groups & Rules</button>
+          <button id="runExportBtn" class="btn primary">Generate Excel</button>
+        </div>
+        <pre id="statusBox" class="status-box">Ready.</pre>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

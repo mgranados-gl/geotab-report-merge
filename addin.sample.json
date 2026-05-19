@@ -1,0 +1,15 @@
+{
+  "name": "Dual Report Merge",
+  "menuName": { "en": "Dual Report Merge" },
+  "url": "https://mgranados-gl.github.io/geotab-report-merge/",
+  "icon": "https://mgranados-gl.github.io/geotab-report-merge/icon.svg",
+  "supportEmail": "support@example.com",
+  "version": "1.0.0",
+  "items": [
+    {
+      "url": "https://mgranados-gl.github.io/geotab-report-merge/",
+      "path": "DualReportMerge",
+      "menuName": { "en": "Dual Report Merge" }
+    }
+  ]
+}
