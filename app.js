@@ -107,35 +107,59 @@
     }
     try {
       appendStatus("Loading groups...");
-      var groups = await callApi("Get", {
-        typeName: "Group",
-        resultsLimit: 5000,
-        sort: { field: "name", order: "asc" }
-      });
+      var groups = null;
+      var groupError = null;
+      
+      // Try Group first
+      try {
+        groups = await callApi("Get", {
+          typeName: "Group",
+          resultsLimit: 5000
+        });
+      } catch (err) {
+        groupError = err;
+        appendStatus("Group entity failed, trying CompanyGroup...");
+        try {
+          groups = await callApi("Get", {
+            typeName: "CompanyGroup",
+            resultsLimit: 5000
+          });
+        } catch (err2) {
+          throw new Error("Could not fetch groups: " + err.message + " (also tried CompanyGroup)");
+        }
+      }
+      
       state.groups = Array.isArray(groups) ? groups : [];
       controls.groupSelect.innerHTML = "";
       state.groups.forEach(function (group) {
         var option = document.createElement("option");
         option.value = group.id;
-        option.textContent = group.name;
+        option.textContent = group.name || group.id;
         controls.groupSelect.appendChild(option);
       });
       appendStatus("Loaded " + state.groups.length + " groups.");
       
       appendStatus("Loading exception rules...");
-      var rules = await callApi("Get", {
-        typeName: "Rule",
-        resultsLimit: 5000,
-        sort: { field: "name", order: "asc" }
-      });
+      var rules = null;
+      try {
+        rules = await callApi("Get", {
+          typeName: "Rule",
+          resultsLimit: 5000
+        });
+      } catch (err) {
+        appendStatus("Could not load rules (non-critical): " + err.message);
+        rules = [];
+      }
+      
       state.exceptionRules = Array.isArray(rules) ? rules : [];
       controls.exceptionRuleSelect.innerHTML = "<option value=\"\">All rules</option>";
       state.exceptionRules.forEach(function (rule) {
         var option = document.createElement("option");
         option.value = rule.id;
-        option.textContent = rule.name;
+        option.textContent = rule.name || rule.id;
         controls.exceptionRuleSelect.appendChild(option);
       });
+      
       appendStatus("Metadata loaded. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
     } catch (err) {
       var errMsg = (err && err.message) ? err.message : String(err);
@@ -149,13 +173,23 @@
       fromDate: range.fromDate,
       toDate: range.toDate
     };
+    // Note: Some databases may not support these search parameters
+    // Omit if causing API errors
     if (groupIds.length > 0) {
-      search.deviceSearch = {
-        groups: groupIds.map(function (id) { return ({ id: id }); })
-      };
+      try {
+        search.deviceSearch = {
+          groups: groupIds.map(function (id) { return ({ id: id }); })
+        };
+      } catch (e) {
+        console.warn("Could not build deviceSearch:", e);
+      }
     }
     if (controls.exceptionRuleSelect.value) {
-      search.ruleSearch = { id: controls.exceptionRuleSelect.value };
+      try {
+        search.ruleSearch = { id: controls.exceptionRuleSelect.value };
+      } catch (e) {
+        console.warn("Could not build ruleSearch:", e);
+      }
     }
     if (!controls.includeAcknowledged.checked) {
       search.isAcknowledged = false;
@@ -166,14 +200,32 @@
   async function fetchExceptionsDetail(range, groupIds) {
     var search = buildExceptionsDetailSearch(range, groupIds);
     appendStatus("Fetching ExceptionsDetail report...");
-    var raw = await callApi("Get", {
-      typeName: "ExceptionDetail",
-      search: search,
-      resultsLimit: 50000
-    });
-    var rows = (Array.isArray(raw) ? raw : []).map(function (event) {
-      return Object.assign({}, event);
-    });
+    var rows = [];
+    try {
+      var raw = await callApi("Get", {
+        typeName: "ExceptionDetail",
+        search: search,
+        resultsLimit: 50000
+      });
+      rows = (Array.isArray(raw) ? raw : []).map(function (event) {
+        return Object.assign({}, event);
+      });
+    } catch (err) {
+      appendStatus("Could not fetch ExceptionsDetail: " + (err.message || String(err)) + ". Trying ExceptionEvent...");
+      try {
+        var raw = await callApi("Get", {
+          typeName: "ExceptionEvent",
+          search: search,
+          resultsLimit: 50000
+        });
+        rows = (Array.isArray(raw) ? raw : []).map(function (event) {
+          return Object.assign({}, event);
+        });
+      } catch (err2) {
+        appendStatus("ExceptionEvent also failed: " + (err2.message || String(err2)), "error");
+        throw err2;
+      }
+    }
     appendStatus("ExceptionsDetail rows: " + rows.length);
     return rows;
   }
@@ -194,17 +246,33 @@
   async function fetchHosLog(range, groupIds) {
     var search = buildHosLogSearch(range, groupIds);
     appendStatus("Fetching HOSLog report...");
-    var raw = await callApi("Get", {
-      typeName: "HosLog",
-      search: search,
-      resultsLimit: 50000
-    });
-    var statusFilter = controls.hosStatusFilter.value;
-    var rows = (Array.isArray(raw) ? raw : [])
-      .filter(function (row) {
-        if (!statusFilter) return true;
-        return (row.status || row.dutyStatus || "").toLowerCase() === statusFilter;
+    var rows = [];
+    try {
+      var raw = await callApi("Get", {
+        typeName: "HosLog",
+        search: search,
+        resultsLimit: 50000
       });
+      rows = (Array.isArray(raw) ? raw : []);
+    } catch (err) {
+      appendStatus("Could not fetch HosLog: " + (err.message || String(err)) + ". Trying HosLogRecord...");
+      try {
+        var raw = await callApi("Get", {
+          typeName: "HosLogRecord",
+          search: search,
+          resultsLimit: 50000
+        });
+        rows = (Array.isArray(raw) ? raw : []);
+      } catch (err2) {
+        appendStatus("HosLogRecord also failed: " + (err2.message || String(err2)), "error");
+        throw err2;
+      }
+    }
+    var statusFilter = controls.hosStatusFilter.value;
+    rows = rows.filter(function (row) {
+      if (!statusFilter) return true;
+      return (row.status || row.dutyStatus || "").toLowerCase() === statusFilter;
+    });
     appendStatus("HOSLog rows: " + rows.length);
     return rows;
   }
