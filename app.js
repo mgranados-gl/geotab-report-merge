@@ -12,21 +12,25 @@
     setMessage("Hello world from Gridline | Gap Report.");
   }
 
-  if (window.geotab && window.geotab.addin) {
-    window.geotab.addin.GridlineGapReport = function () {
-      return {
-        initialize: function () {
-          initializeHelloWorld();
-        },
-        focus: function () {},
-        blur: function () {}
-      };
+  // Register with MyGeotab. The key "GapReport" must match the last segment
+  // of the "path" field in the add-in manifest (e.g. "GapReport/").
+  geotab.addin.GapReport = function (api, state) {
+    return {
+      initialize: function (freshApi, freshState, callback) {
+        initializeHelloWorld();
+        callback();
+      },
+      focus: function (freshApi, freshState) {},
+      blur: function () {}
     };
-  }
+  };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeHelloWorld);
-  } else {
-    initializeHelloWorld();
+  // Standalone preview fallback (browser only, no MyGeotab context).
+  if (typeof geotab === "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeHelloWorld);
+    } else {
+      initializeHelloWorld();
+    }
   }
 })();

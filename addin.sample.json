@@ -1,15 +1,18 @@
 {
-  "name": "Gridline | Gap Report",
-  "menuName": { "en": "Gridline | Gap Report" },
-  "url": "https://mgranados-gl.github.io/geotab-report-merge/",
-  "icon": "https://mgranados-gl.github.io/geotab-report-merge/icon.svg",
-  "supportEmail": "support@gridline.com",
-  "version": "0.1.0",
-  "items": [
-    {
-      "url": "https://mgranados-gl.github.io/geotab-report-merge/",
-      "path": "GridlineGapReport",
-      "menuName": { "en": "Gridline | Gap Report" }
-    }
-  ]
+    "name": "Gap Report",
+    "supportEmail": "support@gridline.com",
+    "version": "1.0.0",
+    "signature": "12345-MYSIGNATURE",
+    "items": [
+        {
+            "url": "https://mgranados-gl.github.io/geotab-report-merge/index.html",
+            "path": "GapReport/",
+            "menuName": {
+                "en": "Gap Report"
+            }
+        }
+    ],
+    "key": "",
+    "isSigned": false,
+    "enableViewSecurityId": true
 }

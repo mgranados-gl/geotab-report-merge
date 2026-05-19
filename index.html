@@ -11,6 +11,12 @@
     <h1>Gridline | Gap Report</h1>
     <p id="message">Loading add-in...</p>
   </main>
+  <script>
+    // Stub so app.js can safely assign geotab.addin.GapReport in standalone mode.
+    if (typeof geotab === "undefined") {
+      window.geotab = { addin: {} };
+    }
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
