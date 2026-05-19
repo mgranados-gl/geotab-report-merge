@@ -3,6 +3,7 @@
 
   var _api = null;
   var _logs = [];
+  var _rules = [];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -62,8 +63,7 @@
     return rows;
   }
 
-  async function fetchExceptions(range) {
-    log("Fetching exceptions for " + formatDisplayDate(range.fromDate) + "…");
+  async function fetchExceptions(range, selectedRuleIds) {
     var search = { fromDate: range.fromDate, toDate: range.toDate };
     var raw;
     try {
@@ -73,8 +73,70 @@
       raw = await callApi("Get", { typeName: "ExceptionDetail", search: search, resultsLimit: 50000 });
     }
     var rows = Array.isArray(raw) ? raw : [];
-    log("Exceptions fetched: " + rows.length + " rows.");
+    if (selectedRuleIds && selectedRuleIds.length > 0) {
+      var idSet = {};
+      selectedRuleIds.forEach(function (id) { idSet[id] = true; });
+      rows = rows.filter(function (row) {
+        var ruleId = row.rule && row.rule.id ? row.rule.id
+          : row.ruleId ? row.ruleId : null;
+        return ruleId && idSet[ruleId];
+      });
+      log("After rule filter: " + rows.length + " rows.");
+    } else {
+      log("Exceptions fetched: " + rows.length + " rows.");
+    }
     return rows;
+  }
+
+  // ── Exception rules ──────────────────────────────────────────────────────────
+
+  async function loadExceptionRules() {
+    var container = qs("rulesContainer");
+    var runBtn = qs("runBtn");
+    if (container) container.innerHTML = '<p class="hint">Loading exception rules\u2026</p>';
+    try {
+      var raw = await callApi("Get", { typeName: "Rule", resultsLimit: 5000 });
+      _rules = Array.isArray(raw) ? raw.filter(function (r) { return r.name; }) : [];
+      _rules.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      populateRulesList();
+      log("Loaded " + _rules.length + " exception rules.");
+    } catch (e) {
+      log("Could not load exception rules: " + e.message, "error");
+      if (container) container.innerHTML = '<p class="hint error-text">Failed to load rules.</p>';
+    }
+    if (runBtn) runBtn.disabled = false;
+  }
+
+  function populateRulesList() {
+    var container = qs("rulesContainer");
+    if (!container) return;
+    if (_rules.length === 0) {
+      container.innerHTML = '<p class="hint">No exception rules found.</p>';
+      return;
+    }
+    var select = document.createElement("select");
+    select.id = "rulesSelect";
+    select.multiple = true;
+    select.size = Math.min(_rules.length, 8);
+    _rules.forEach(function (rule) {
+      var opt = document.createElement("option");
+      opt.value = rule.id;
+      opt.textContent = rule.name;
+      opt.selected = true;
+      select.appendChild(opt);
+    });
+    container.innerHTML = "";
+    container.appendChild(select);
+  }
+
+  function getSelectedRuleIds() {
+    var select = qs("rulesSelect");
+    if (!select) return [];
+    var ids = [];
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].selected) ids.push(select.options[i].value);
+    }
+    return ids;
   }
 
   // ── Flattening ──────────────────────────────────────────────────────────────
@@ -104,6 +166,29 @@
 
   function flattenRows(rows) {
     return rows.map(function (row) { return flattenObject(row); });
+  }
+
+  // ── Driver sort / filter ────────────────────────────────────────────────────
+
+  var DRIVER_NAME_FIELDS = [
+    "driver_lastName", "driver_name", "driver_firstName",
+    "userName", "lastName", "driverName"
+  ];
+
+  function getDriverSortKey(row) {
+    for (var i = 0; i < DRIVER_NAME_FIELDS.length; i++) {
+      var v = row[DRIVER_NAME_FIELDS[i]];
+      if (v && String(v).trim()) return String(v).trim().toLowerCase();
+    }
+    return null;
+  }
+
+  function filterAndSortByDriver(rows) {
+    var withDriver = rows.filter(function (row) { return getDriverSortKey(row) !== null; });
+    withDriver.sort(function (a, b) {
+      return getDriverSortKey(a).localeCompare(getDriverSortKey(b));
+    });
+    return withDriver;
   }
 
   // ── Excel export ────────────────────────────────────────────────────────────
@@ -150,11 +235,19 @@
       var range = getYesterdayRange();
       var dateLabel = range.fromDate.toISOString().slice(0, 10);
       var hosRows, exRows;
+      var selectedRuleIds = getSelectedRuleIds();
+      if (selectedRuleIds.length === 0) {
+        throw new Error("Please select at least one exception rule before running.");
+      }
+      log("Running for " + selectedRuleIds.length + " selected rule(s)\u2026");
       [hosRows, exRows] = await Promise.all([
         fetchHosLogs(range),
-        fetchExceptions(range)
+        fetchExceptions(range, selectedRuleIds)
       ]);
-      buildAndDownloadWorkbook(flattenRows(hosRows), flattenRows(exRows), dateLabel);
+      var flatHos = filterAndSortByDriver(flattenRows(hosRows));
+      var flatEx  = filterAndSortByDriver(flattenRows(exRows));
+      log("HOS by driver: " + flatHos.length + " | Exceptions by driver: " + flatEx.length);
+      buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
     } catch (err) {
       log("ERROR: " + (err.message || String(err)), "error");
     } finally {
@@ -170,8 +263,27 @@
     var label = qs("dateLabel");
     if (label) label.textContent = formatDisplayDate(range.fromDate);
     var btn = qs("runBtn");
-    if (btn) btn.addEventListener("click", runReport);
-    log(_api ? "Ready. Click Run Report to pull yesterday's data." : "Standalone preview — open inside MyGeotab to run reports.");
+    if (btn) {
+      btn.disabled = true;
+      btn.addEventListener("click", runReport);
+    }
+    var selectAll = qs("selectAllBtn");
+    var clearAll  = qs("clearAllBtn");
+    if (selectAll) selectAll.addEventListener("click", function () {
+      var sel = qs("rulesSelect");
+      if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true;
+    });
+    if (clearAll) clearAll.addEventListener("click", function () {
+      var sel = qs("rulesSelect");
+      if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
+    });
+    if (_api) {
+      log("Loading exception rules\u2026");
+      loadExceptionRules();
+    } else {
+      log("Standalone preview \u2014 open inside MyGeotab to run reports.");
+      if (btn) btn.disabled = false;
+    }
   }
 
   // ── Geotab add-in registration ───────────────────────────────────────────────

@@ -128,3 +128,62 @@ body {
 
 .status-box.success { border-color: #b7e5c7; background: #f0fdf4; color: var(--success); }
 .status-box.error   { border-color: #f3c2c2; background: #fff3f3; color: var(--error); }
+
+.rules-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rules-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rules-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-link:hover { color: var(--primary-strong); }
+
+.divider { font-size: 0.75rem; color: var(--border); }
+
+#rulesSelect {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  font-size: 0.84rem;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.error-text { color: var(--error); }
