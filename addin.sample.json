@@ -1,15 +1,15 @@
 {
-  "name": "Dual Report Merge",
-  "menuName": { "en": "Dual Report Merge" },
+  "name": "HOS Log Report",
+  "menuName": { "en": "HOS Log Report" },
   "url": "https://mgranados-gl.github.io/geotab-report-merge/",
   "icon": "https://mgranados-gl.github.io/geotab-report-merge/icon.svg",
   "supportEmail": "support@gridline.com",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "items": [
     {
       "url": "https://mgranados-gl.github.io/geotab-report-merge/",
-      "path": "DualReportMerge",
-      "menuName": { "en": "Dual Report Merge" }
+      "path": "HOSLogReport",
+      "menuName": { "en": "HOS Log Report" }
     }
   ]
 }

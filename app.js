@@ -89,47 +89,6 @@
     });
   }
 
-  function buildExceptionsDetailSearch(range) {
-    var search = {
-      fromDate: range.fromDate,
-      toDate: range.toDate
-    };
-    return search;
-  }
-
-  async function fetchExceptionsDetail(range) {
-    var search = buildExceptionsDetailSearch(range);
-    appendStatus("Fetching ExceptionsDetail report...");
-    var rows = [];
-    try {
-      var raw = await callApi("Get", {
-        typeName: "ExceptionDetail",
-        search: search,
-        resultsLimit: 50000
-      });
-      rows = (Array.isArray(raw) ? raw : []).map(function (event) {
-        return Object.assign({}, event);
-      });
-    } catch (err) {
-      appendStatus("Could not fetch ExceptionsDetail: " + (err.message || String(err)) + ". Trying ExceptionEvent...");
-      try {
-        var raw = await callApi("Get", {
-          typeName: "ExceptionEvent",
-          search: search,
-          resultsLimit: 50000
-        });
-        rows = (Array.isArray(raw) ? raw : []).map(function (event) {
-          return Object.assign({}, event);
-        });
-      } catch (err2) {
-        appendStatus("ExceptionEvent also failed: " + (err2.message || String(err2)), "error");
-        throw err2;
-      }
-    }
-    appendStatus("ExceptionsDetail rows: " + rows.length);
-    return rows;
-  }
-
   function buildHosLogSearch(range) {
     var search = {
       fromDate: range.fromDate,
@@ -208,16 +167,13 @@
     };
   }
 
-  async function exportWorkbook(exceptionsRows, hosRows) {
+  async function exportWorkbook(hosRows) {
     var templateBuffer = await readTemplateArrayBuffer();
     var workbook = await XlsxPopulate.fromDataAsync(templateBuffer);
-    var data1Sheet = ensureSheet(workbook, "Data1");
-    var data2Sheet = ensureSheet(workbook, "Data2");
-    clearRows(data1Sheet);
-    clearRows(data2Sheet);
-    var exWrite = writeRows(data1Sheet, exceptionsRows);
-    var hosWrite = writeRows(data2Sheet, hosRows);
-    var outputName = (controls.outputFileName.value || "Geotab-Report-Merge.xlsx").trim();
+    var dataSheet = ensureSheet(workbook, "HOSLog");
+    clearRows(dataSheet);
+    var hosWrite = writeRows(dataSheet, hosRows);
+    var outputName = (controls.outputFileName.value || "HOS-Log-Report.xlsx").trim();
     var exportBuffer = await workbook.outputAsync();
     var blob = new Blob([exportBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -230,7 +186,7 @@
     link.remove();
     URL.revokeObjectURL(link.href);
     appendStatus(
-      "Workbook generated. Data1 rows: " + exWrite.writtenRows + ", Data2 rows: " + hosWrite.writtenRows,
+      "Workbook generated with " + hosWrite.writtenRows + " rows.",
       "success"
     );
   }
@@ -240,13 +196,12 @@
       controls.runExportBtn.disabled = true;
       controls.runExportBtn.textContent = "Generating...";
       var range = parseDateRange();
-      appendStatus("Starting report pull for " + range.fromDate.toISOString() + " to " + range.toDate.toISOString());
+      appendStatus("Fetching HOS log report for " + range.fromDate.toISOString() + " to " + range.toDate.toISOString());
       if (!state.api) {
         throw new Error("This add-in must run inside MyGeotab to fetch report data.");
       }
-      var exceptionsRows = await fetchExceptionsDetail(range);
       var hosRows = await fetchHosLog(range);
-      await exportWorkbook(exceptionsRows, hosRows);
+      await exportWorkbook(hosRows);
     } catch (error) {
       var message = (error && error.message) ? error.message : String(error);
       appendStatus("Export failed: " + message, "error");
@@ -286,7 +241,7 @@
     controls.runExportBtn.disabled = false;
     if (state.api) {
       controls.envPill.textContent = "MyGeotab";
-      appendStatus("Add-in ready. Select a date range and generate the workbook.", "success");
+      appendStatus("Add-in ready. Select dates and export HOS log data.", "success");
     } else {
       controls.envPill.textContent = "Standalone";
       appendStatus("Running in standalone mode. Open inside MyGeotab add-in context to fetch report data.");
@@ -306,12 +261,12 @@
   }
 
   if (window.geotab && window.geotab.addin) {
-    console.log("Registering DualReportMerge addin");
-    window.geotab.addin.DualReportMerge = function (api, geotabState) {
-      console.log("DualReportMerge addin function called");
+    console.log("Registering HOSLogReport addin");
+    window.geotab.addin.HOSLogReport = function (api, geotabState) {
+      console.log("HOSLogReport addin function called");
       return {
         initialize: function () {
-          console.log("DualReportMerge initialize called");
+          console.log("HOSLogReport initialize called");
           bootAddin(api, geotabState);
         },
         focus: function () {
