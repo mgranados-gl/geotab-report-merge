@@ -83,11 +83,20 @@
         reject(new Error("Geotab API context is not available."));
         return;
       }
-      state.api.call(method, params, function (result) {
-        resolve(result);
-      }, function (error) {
-        reject(error || new Error("Unknown Geotab API error."));
-      });
+      try {
+        state.api.call(method, params, function (result) {
+          if (result && result.errors) {
+            reject(new Error("API error: " + JSON.stringify(result.errors)));
+            return;
+          }
+          resolve(result);
+        }, function (error) {
+          var msg = error && error.message ? error.message : String(error);
+          reject(new Error("API call failed for " + method + ": " + msg));
+        });
+      } catch (err) {
+        reject(new Error("API call exception: " + (err.message || String(err))));
+      }
     });
   }
 
@@ -96,35 +105,43 @@
       appendStatus("No Geotab API context. Metadata load skipped.");
       return;
     }
-    appendStatus("Loading groups...");
-    var groups = await callApi("Get", {
-      typeName: "Group",
-      resultsLimit: 5000,
-      sort: { field: "name", order: "asc" }
-    });
-    state.groups = Array.isArray(groups) ? groups : [];
-    controls.groupSelect.innerHTML = "";
-    state.groups.forEach(function (group) {
-      var option = document.createElement("option");
-      option.value = group.id;
-      option.textContent = group.name;
-      controls.groupSelect.appendChild(option);
-    });
-    appendStatus("Loading exception rules...");
-    var rules = await callApi("Get", {
-      typeName: "Rule",
-      resultsLimit: 5000,
-      sort: { field: "name", order: "asc" }
-    });
-    state.exceptionRules = Array.isArray(rules) ? rules : [];
-    controls.exceptionRuleSelect.innerHTML = "<option value=\"\">All rules</option>";
-    state.exceptionRules.forEach(function (rule) {
-      var option = document.createElement("option");
-      option.value = rule.id;
-      option.textContent = rule.name;
-      controls.exceptionRuleSelect.appendChild(option);
-    });
-    appendStatus("Metadata loaded. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
+    try {
+      appendStatus("Loading groups...");
+      var groups = await callApi("Get", {
+        typeName: "Group",
+        resultsLimit: 5000,
+        sort: { field: "name", order: "asc" }
+      });
+      state.groups = Array.isArray(groups) ? groups : [];
+      controls.groupSelect.innerHTML = "";
+      state.groups.forEach(function (group) {
+        var option = document.createElement("option");
+        option.value = group.id;
+        option.textContent = group.name;
+        controls.groupSelect.appendChild(option);
+      });
+      appendStatus("Loaded " + state.groups.length + " groups.");
+      
+      appendStatus("Loading exception rules...");
+      var rules = await callApi("Get", {
+        typeName: "Rule",
+        resultsLimit: 5000,
+        sort: { field: "name", order: "asc" }
+      });
+      state.exceptionRules = Array.isArray(rules) ? rules : [];
+      controls.exceptionRuleSelect.innerHTML = "<option value=\"\">All rules</option>";
+      state.exceptionRules.forEach(function (rule) {
+        var option = document.createElement("option");
+        option.value = rule.id;
+        option.textContent = rule.name;
+        controls.exceptionRuleSelect.appendChild(option);
+      });
+      appendStatus("Metadata loaded. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
+    } catch (err) {
+      var errMsg = (err && err.message) ? err.message : String(err);
+      appendStatus("ERROR loading metadata: " + errMsg, "error");
+      console.error("loadMetadata error:", err);
+    }
   }
 
   function buildExceptionsDetailSearch(range, groupIds) {
@@ -334,6 +351,7 @@
   function bootAddin(api, geotabState) {
     state.api = api;
     state.geotabState = geotabState;
+    console.log("bootAddin called with api:", !!api, "geotabState:", !!geotabState);
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", initializeUi);
     } else {
@@ -342,9 +360,12 @@
   }
 
   if (window.geotab && window.geotab.addin) {
+    console.log("Registering DualReportMerge addin");
     window.geotab.addin.DualReportMerge = function (api, geotabState) {
+      console.log("DualReportMerge addin function called");
       return {
         initialize: function () {
+          console.log("DualReportMerge initialize called");
           bootAddin(api, geotabState);
         },
         focus: function () {
@@ -355,6 +376,8 @@
         }
       };
     };
+  } else {
+    console.log("geotab.addin namespace not available - add-in running in standalone mode");
   }
 
   // Standalone fallback for local UI preview.
