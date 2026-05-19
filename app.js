@@ -12,9 +12,9 @@
     setMessage("Hello world from Gridline | Gap Report.");
   }
 
-  // Register with MyGeotab. The key "GapReport" must match the last segment
-  // of the "path" field in the add-in manifest (e.g. "GapReport/").
-  geotab.addin.GapReport = function (api, state) {
+  // Register with MyGeotab. The key must match the normalized path segment
+  // MyGeotab derives from the manifest (GapReport -> gap_report).
+  geotab.addin.gap_report = function (api, state) {
     return {
       initialize: function (freshApi, freshState, callback) {
         initializeHelloWorld();

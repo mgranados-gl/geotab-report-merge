@@ -6,7 +6,7 @@
     "items": [
         {
             "url": "https://mgranados-gl.github.io/geotab-report-merge/index.html",
-            "path": "GapReport/",
+            "path": "gap_report/",
             "menuName": {
                 "en": "Gap Report"
             }
