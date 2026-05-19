@@ -8,15 +8,30 @@
 </head>
 <body>
   <main class="shell">
-    <h1>Gridline | Gap Report</h1>
-    <p id="message">Loading add-in...</p>
+    <header class="report-header">
+      <div class="brand-mark">G</div>
+      <div class="brand-copy">
+        <h1>Gridline | Gap Report</h1>
+        <p>Pulls yesterday's HOS logs and exception events into a single Excel workbook.</p>
+      </div>
+    </header>
+
+    <div class="date-card">
+      <span class="date-label-text">Reporting date</span>
+      <strong id="dateLabel">—</strong>
+    </div>
+
+    <div class="action-row">
+      <button id="runBtn" class="btn primary">Run Report</button>
+    </div>
+
+    <pre id="statusBox" class="status-box">Initializing…</pre>
   </main>
+
   <script>
-    // Stub so app.js can safely assign geotab.addin.GapReport in standalone mode.
-    if (typeof geotab === "undefined") {
-      window.geotab = { addin: {} };
-    }
+    if (typeof geotab === "undefined") { window.geotab = { addin: {} }; }
   </script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
