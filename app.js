@@ -4,6 +4,9 @@
   var _api = null;
   var _logs = [];
   var _rules = [];
+  var _drivers = [];
+  var _vehicles = [];
+  var _groups = [];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -86,7 +89,6 @@
 
   async function loadExceptionRules() {
     var container = qs("rulesContainer");
-    var runBtn = qs("runBtn");
     if (container) container.innerHTML = '<p class="hint">Loading exception rules\u2026</p>';
     try {
       var raw = await callApi("Get", { typeName: "Rule", resultsLimit: 5000 });
@@ -98,7 +100,6 @@
       log("Could not load exception rules: " + e.message, "error");
       if (container) container.innerHTML = '<p class="hint error-text">Failed to load rules.</p>';
     }
-    if (runBtn) runBtn.disabled = false;
   }
 
   function populateRulesList() {
@@ -133,6 +134,176 @@
     return ids;
   }
 
+  function getSelectedIds(selectId) {
+    var select = qs(selectId);
+    if (!select) return [];
+    var ids = [];
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].selected) ids.push(select.options[i].value);
+    }
+    return ids;
+  }
+
+  function populateEntitySelect(containerId, selectId, items, noRowsText, labelField) {
+    var container = qs(containerId);
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<p class="hint">' + noRowsText + '</p>';
+      return;
+    }
+    var select = document.createElement("select");
+    select.id = selectId;
+    select.multiple = true;
+    select.size = Math.min(items.length, 8);
+    items.forEach(function (item) {
+      var opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = item[labelField] || item.name || item.id;
+      opt.selected = true;
+      select.appendChild(opt);
+    });
+    container.innerHTML = "";
+    container.appendChild(select);
+  }
+
+  async function loadDrivers() {
+    var container = qs("driversContainer");
+    if (container) container.innerHTML = '<p class="hint">Loading drivers\u2026</p>';
+    try {
+      var raw = await callApi("Get", { typeName: "User", resultsLimit: 50000 });
+      _drivers = Array.isArray(raw) ? raw.filter(function (u) {
+        return !!u.id && (u.isDriver === true || u.isEULAAccepted === true || u.companyGroups);
+      }) : [];
+      _drivers.sort(function (a, b) {
+        var an = (a.name || a.userName || "").toLowerCase();
+        var bn = (b.name || b.userName || "").toLowerCase();
+        return an.localeCompare(bn);
+      });
+      populateEntitySelect("driversContainer", "driversSelect", _drivers, "No drivers found.", "name");
+      log("Loaded " + _drivers.length + " drivers.");
+    } catch (e) {
+      log("Could not load drivers: " + e.message, "error");
+      if (container) container.innerHTML = '<p class="hint error-text">Failed to load drivers.</p>';
+    }
+  }
+
+  async function loadVehicles() {
+    var container = qs("vehiclesContainer");
+    if (container) container.innerHTML = '<p class="hint">Loading vehicles\u2026</p>';
+    try {
+      var raw = await callApi("Get", { typeName: "Device", resultsLimit: 50000 });
+      _vehicles = Array.isArray(raw) ? raw.filter(function (d) { return !!d.id; }) : [];
+      _vehicles.sort(function (a, b) {
+        var an = (a.name || "").toLowerCase();
+        var bn = (b.name || "").toLowerCase();
+        return an.localeCompare(bn);
+      });
+      populateEntitySelect("vehiclesContainer", "vehiclesSelect", _vehicles, "No vehicles found.", "name");
+      log("Loaded " + _vehicles.length + " vehicles.");
+    } catch (e) {
+      log("Could not load vehicles: " + e.message, "error");
+      if (container) container.innerHTML = '<p class="hint error-text">Failed to load vehicles.</p>';
+    }
+  }
+
+  async function loadGroups() {
+    var container = qs("groupsContainer");
+    if (container) container.innerHTML = '<p class="hint">Loading groups\u2026</p>';
+    try {
+      var raw = await callApi("Get", { typeName: "Group", resultsLimit: 50000 });
+      _groups = Array.isArray(raw) ? raw.filter(function (g) { return !!g.id && !!g.name; }) : [];
+      _groups.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      populateEntitySelect("groupsContainer", "groupsSelect", _groups, "No groups found.", "name");
+      log("Loaded " + _groups.length + " groups.");
+    } catch (e) {
+      log("Could not load groups: " + e.message, "error");
+      if (container) container.innerHTML = '<p class="hint error-text">Failed to load groups.</p>';
+    }
+  }
+
+  function getRefId(ref) {
+    if (!ref) return null;
+    if (typeof ref === "string") return ref;
+    if (typeof ref === "object" && ref.id) return ref.id;
+    return null;
+  }
+
+  function getRowDriverId(row) {
+    return getRefId(row.driver) || getRefId(row.user) || getRefId(row.userId) || null;
+  }
+
+  function getRowVehicleId(row) {
+    return getRefId(row.device) || getRefId(row.vehicle) || getRefId(row.deviceId) || null;
+  }
+
+  function getRowGroupIds(row) {
+    var refs = [];
+    function addGroupRefs(value) {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(addGroupRefs);
+        return;
+      }
+      if (typeof value === "object") {
+        var id = getRefId(value);
+        if (id) refs.push(id);
+      }
+    }
+    addGroupRefs(row.groups);
+    addGroupRefs(row.companyGroups);
+    if (row.driver) {
+      addGroupRefs(row.driver.groups);
+      addGroupRefs(row.driver.companyGroups);
+    }
+    if (row.user) {
+      addGroupRefs(row.user.groups);
+      addGroupRefs(row.user.companyGroups);
+    }
+    if (row.device) {
+      addGroupRefs(row.device.groups);
+      addGroupRefs(row.device.companyGroups);
+    }
+    return refs;
+  }
+
+  function filterRows(rows, filters) {
+    var driverSet = {};
+    var vehicleSet = {};
+    var groupSet = {};
+    var i;
+
+    for (i = 0; i < filters.driverIds.length; i++) driverSet[filters.driverIds[i]] = true;
+    for (i = 0; i < filters.vehicleIds.length; i++) vehicleSet[filters.vehicleIds[i]] = true;
+    for (i = 0; i < filters.groupIds.length; i++) groupSet[filters.groupIds[i]] = true;
+
+    var hasDriverFilter = filters.driverIds.length > 0;
+    var hasVehicleFilter = filters.vehicleIds.length > 0;
+    var hasGroupFilter = filters.groupIds.length > 0;
+
+    return rows.filter(function (row) {
+      if (hasDriverFilter) {
+        var driverId = getRowDriverId(row);
+        if (!driverId || !driverSet[driverId]) return false;
+      }
+      if (hasVehicleFilter) {
+        var vehicleId = getRowVehicleId(row);
+        if (!vehicleId || !vehicleSet[vehicleId]) return false;
+      }
+      if (hasGroupFilter) {
+        var rowGroupIds = getRowGroupIds(row);
+        var hasMatch = false;
+        for (var g = 0; g < rowGroupIds.length; g++) {
+          if (groupSet[rowGroupIds[g]]) {
+            hasMatch = true;
+            break;
+          }
+        }
+        if (!hasMatch) return false;
+      }
+      return true;
+    });
+  }
+
   // ── Flattening ──────────────────────────────────────────────────────────────
   // Recursively flattens nested objects so each row is a plain key→value map.
   // Arrays are JSON-stringified; Date objects are left as-is for SheetJS.
@@ -160,31 +331,6 @@
 
   function flattenRows(rows) {
     return rows.map(function (row) { return flattenObject(row); });
-  }
-
-  // ── Driver sort / filter ────────────────────────────────────────────────────
-
-  var DRIVER_NAME_FIELDS = [
-    "driver_lastName", "driver_name", "driver_firstName",
-    "userName", "lastName", "driverName"
-  ];
-
-  function getDriverSortKey(row) {
-    for (var i = 0; i < DRIVER_NAME_FIELDS.length; i++) {
-      var v = row[DRIVER_NAME_FIELDS[i]];
-      if (v && String(v).trim()) return String(v).trim().toLowerCase();
-    }
-    return null;
-  }
-
-  function filterAndSortByDriver(rows) {
-    var copy = rows.slice();
-    copy.sort(function (a, b) {
-      var ka = getDriverSortKey(a) || "\uffff";
-      var kb = getDriverSortKey(b) || "\uffff";
-      return ka.localeCompare(kb);
-    });
-    return copy;
   }
 
   // ── Excel export ────────────────────────────────────────────────────────────
@@ -232,6 +378,9 @@
       var dateLabel = range.fromDate.toISOString().slice(0, 10);
       var hosRows, exRows;
       var selectedRuleIds = getSelectedRuleIds();
+      var selectedDriverIds = getSelectedIds("driversSelect");
+      var selectedVehicleIds = getSelectedIds("vehiclesSelect");
+      var selectedGroupIds = getSelectedIds("groupsSelect");
       if (selectedRuleIds.length === 0) {
         throw new Error("Please select at least one exception rule before running.");
       }
@@ -240,9 +389,19 @@
         fetchHosLogs(range),
         fetchExceptions(range, selectedRuleIds)
       ]);
+      hosRows = filterRows(hosRows, {
+        driverIds: selectedDriverIds,
+        vehicleIds: selectedVehicleIds,
+        groupIds: selectedGroupIds
+      });
+      exRows = filterRows(exRows, {
+        driverIds: selectedDriverIds,
+        vehicleIds: selectedVehicleIds,
+        groupIds: selectedGroupIds
+      });
       var flatHos = flattenRows(hosRows);
       var flatEx  = flattenRows(exRows);
-      log("HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
+      log("After filters \u2014 HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
       buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
     } catch (err) {
       log("ERROR: " + (err.message || String(err)), "error");
@@ -273,9 +432,34 @@
       var sel = qs("rulesSelect");
       if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
     });
+
+    function bindSelectButtons(selectAllId, clearId, selectId) {
+      var selectAllBtn = qs(selectAllId);
+      var clearBtn = qs(clearId);
+      if (selectAllBtn) selectAllBtn.addEventListener("click", function () {
+        var sel = qs(selectId);
+        if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true;
+      });
+      if (clearBtn) clearBtn.addEventListener("click", function () {
+        var sel = qs(selectId);
+        if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
+      });
+    }
+
+    bindSelectButtons("selectAllDriversBtn", "clearDriversBtn", "driversSelect");
+    bindSelectButtons("selectAllVehiclesBtn", "clearVehiclesBtn", "vehiclesSelect");
+    bindSelectButtons("selectAllGroupsBtn", "clearGroupsBtn", "groupsSelect");
+
     if (_api) {
-      log("Loading exception rules\u2026");
-      loadExceptionRules();
+      log("Loading filters and exception rules\u2026");
+      Promise.all([
+        loadExceptionRules(),
+        loadDrivers(),
+        loadVehicles(),
+        loadGroups()
+      ]).then(function () {
+        if (btn) btn.disabled = false;
+      });
     } else {
       log("Standalone preview \u2014 open inside MyGeotab to run reports.");
       if (btn) btn.disabled = false;

@@ -136,6 +136,22 @@ body {
   margin-bottom: 14px;
 }
 
+.filters-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: #fcfdff;
+}
+
+.filter-group {
+  margin-top: 10px;
+}
+
+.filter-group:first-of-type {
+  margin-top: 4px;
+}
+
 .rules-header {
   display: flex;
   align-items: center;
@@ -170,6 +186,19 @@ body {
 .divider { font-size: 0.75rem; color: var(--border); }
 
 #rulesSelect {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  font-size: 0.84rem;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+}
+
+#driversSelect,
+#vehiclesSelect,
+#groupsSelect {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
