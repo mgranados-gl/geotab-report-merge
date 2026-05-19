@@ -3,66 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Geotab HOS Log Report</title>
+  <title>Gridline | Gap Report</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <aside class="dev-disclaimer" role="note" aria-label="Development disclaimer">
-    This tool is currently in development and is not ready for production use.
-  </aside>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand-mark">G</div>
-      <div class="brand-copy">
-        <h1>HOS Log Report</h1>
-        <p>Extract and export HOS log data for the selected date range</p>
-      </div>
-      <div class="env-pill" id="envPill">Standalone</div>
-    </header>
-    <main class="content-grid">
-      <section class="panel">
-        <h2>Filters</h2>
-        <div class="field-grid">
-          <label class="field">
-            <span>Date Preset</span>
-            <select id="datePreset">
-              <option value="today">Today</option>
-              <option value="last7" selected>Last 7 days</option>
-              <option value="last30">Last 30 days</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>From</span>
-            <input id="fromDate" type="date" />
-          </label>
-          <label class="field">
-            <span>To</span>
-            <input id="toDate" type="date" />
-          </label>
-        </div>
-      </section>
-      <section class="panel">
-        <h2>Template & Export</h2>
-        <div class="field-grid">
-          <label class="field">
-            <span>Template Workbook</span>
-            <input id="templateFile" type="file" accept=".xlsx" />
-            <small>Optional if template.xlsx is present in the repo root.</small>
-          </label>
-          <label class="field">
-            <span>Output File Name</span>
-            <input id="outputFileName" type="text" value="HOS-Log-Report.xlsx" />
-          </label>
-        </div>
-        <div class="button-row">
-          <button id="runExportBtn" class="btn primary" disabled>Generate Excel</button>
-        </div>
-        <pre id="statusBox" class="status-box">Initializing...</pre>
-      </section>
-    </main>
-  </div>
-  <script src="https://unpkg.com/xlsx-populate/browser/xlsx-populate.min.js"></script>
+  <main class="shell">
+    <h1>Gridline | Gap Report</h1>
+    <p id="message">Loading add-in...</p>
+  </main>
   <script src="app.js"></script>
 </body>
 </html>

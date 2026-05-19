@@ -1,29 +1,24 @@
-# Dual Report Merge MyGeotab Add-In
+# Gridline | Gap Report
 
-This add-in lets you select a date range, groups, and exceptions, then pulls ExceptionsDetail and HOSLog reports and writes them into the "Data1" and "Data2" tabs of a provided Excel template. All other tabs in the template remain unchanged.
+Minimal MyGeotab add-in starter that serves a hello-world message from GitHub Pages.
 
-## Features
-- MyGeotab-style UI (date range, group, exception selectors)
-- Pulls ExceptionsDetail and HOSLog reports
-- Writes data to "Data1" and "Data2" tabs in template.xlsx
-- Leaves all other tabs untouched
-- Exports a merged Excel file
-- All files in repo root; GitHub Pages hosting
+## Files
 
-## Setup
-1. Place your template as `template.xlsx` in the repo root (or use the sample provided).
-2. Enable GitHub Pages (Settings > Pages > Source: GitHub Actions).
-3. Register the add-in in MyGeotab using the URLs in `addin.sample.json`.
+- `index.html`: add-in page shell
+- `app.js`: add-in registration (`window.geotab.addin.GridlineGapReport`)
+- `styles.css`: basic styling
+- `icon.svg`: menu icon
+- `addin.sample.json`: sample add-in manifest for MyGeotab
 
-## Usage
-- Open the add-in from MyGeotab.
-- Select filters and settings.
-- Click Generate Excel to export the merged file.
+## Host on GitHub Pages
 
-## Development
-- All source files are in the repo root.
-- To preview locally: `python -m http.server 8080`
-- Open `http://localhost:8080` in your browser.
+1. Push this repository to GitHub.
+2. In repository settings, enable GitHub Pages from the `main` branch (root).
+3. Verify the site URL is:
+   - `https://mgranados-gl.github.io/geotab-report-merge/`
+4. Use `addin.sample.json` values in MyGeotab Add-In configuration.
 
-## License
-MIT
+## Current Behavior
+
+- Shows: `Hello world from Gridline | Gap Report.`
+- Works in standalone browser preview and in MyGeotab add-in context.
