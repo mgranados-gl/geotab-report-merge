@@ -51,13 +51,7 @@
   async function fetchHosLogs(range) {
     log("Fetching HOS logs for " + formatDisplayDate(range.fromDate) + "…");
     var search = { fromDate: range.fromDate, toDate: range.toDate };
-    var raw;
-    try {
-      raw = await callApi("Get", { typeName: "HosLog", search: search, resultsLimit: 50000 });
-    } catch (e) {
-      log("HosLog failed, trying DutyStatusLog: " + e.message);
-      raw = await callApi("Get", { typeName: "DutyStatusLog", search: search, resultsLimit: 50000 });
-    }
+    var raw = await callApi("Get", { typeName: "DutyStatusLog", search: search, resultsLimit: 50000 });
     var rows = Array.isArray(raw) ? raw : [];
     log("HOS logs fetched: " + rows.length + " rows.");
     return rows;
