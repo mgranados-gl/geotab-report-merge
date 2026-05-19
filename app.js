@@ -160,11 +160,13 @@
         controls.exceptionRuleSelect.appendChild(option);
       });
       
-      appendStatus("Metadata loaded. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
+      appendStatus("Metadata loaded successfully. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
+      return true;
     } catch (err) {
       var errMsg = (err && err.message) ? err.message : String(err);
       appendStatus("ERROR loading metadata: " + errMsg, "error");
       console.error("loadMetadata error:", err);
+      throw err;
     }
   }
 
@@ -405,10 +407,18 @@
     cacheControls();
     setDateRangeFromPreset("last7");
     wireEvents();
+    controls.runExportBtn.disabled = false;
+    controls.loadMetaBtn.disabled = false;
     if (state.api) {
       controls.envPill.textContent = "MyGeotab";
-      loadMetadata().catch(function (error) {
+      loadMetadata().then(function() {
+        appendStatus("Add-in ready.", "success");
+        controls.runExportBtn.disabled = false;
+        controls.loadMetaBtn.disabled = false;
+      }).catch(function (error) {
         appendStatus("Metadata load failed: " + (error.message || String(error)), "error");
+        controls.runExportBtn.disabled = false;
+        controls.loadMetaBtn.disabled = false;
       });
     } else {
       controls.envPill.textContent = "Standalone";
@@ -420,6 +430,7 @@
     state.api = api;
     state.geotabState = geotabState;
     console.log("bootAddin called with api:", !!api, "geotabState:", !!geotabState);
+    appendStatus("Initializing add-in...");
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", initializeUi);
     } else {
