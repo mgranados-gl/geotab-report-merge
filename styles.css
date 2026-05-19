@@ -26,6 +26,17 @@ body {
     linear-gradient(180deg, #f4f7fb 0%, var(--bg) 100%);
 }
 
+.dev-disclaimer {
+  width: 100%;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b2f00;
+  background: #fff3cd;
+  border-bottom: 1px solid #f2cf8e;
+}
+
 .app-shell {
   max-width: 1200px;
   margin: 0 auto;

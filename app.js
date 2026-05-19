@@ -4,9 +4,7 @@
   var state = {
     api: null,
     geotabState: null,
-    logs: [],
-    groups: [],
-    exceptionRules: []
+    logs: []
   };
 
   var controls = {};
@@ -68,15 +66,6 @@
     return { fromDate: fromDate, toDate: toDate };
   }
 
-  function getSelectedGroupIds() {
-    var values = [];
-    for (var i = 0; i < controls.groupSelect.options.length; i += 1) {
-      var option = controls.groupSelect.options[i];
-      if (option.selected) values.push(option.value);
-    }
-    return values;
-  }
-
   function callApi(method, params) {
     return new Promise(function (resolve, reject) {
       if (!state.api) {
@@ -100,107 +89,16 @@
     });
   }
 
-  async function loadMetadata() {
-    if (!state.api) {
-      appendStatus("No Geotab API context. Metadata load skipped.");
-      return;
-    }
-    try {
-      appendStatus("Loading groups...");
-      var groups = null;
-      var groupError = null;
-      
-      // Try Group first
-      try {
-        groups = await callApi("Get", {
-          typeName: "Group",
-          resultsLimit: 5000
-        });
-      } catch (err) {
-        groupError = err;
-        appendStatus("Group entity failed, trying CompanyGroup...");
-        try {
-          groups = await callApi("Get", {
-            typeName: "CompanyGroup",
-            resultsLimit: 5000
-          });
-        } catch (err2) {
-          throw new Error("Could not fetch groups: " + err.message + " (also tried CompanyGroup)");
-        }
-      }
-      
-      state.groups = Array.isArray(groups) ? groups : [];
-      controls.groupSelect.innerHTML = "";
-      state.groups.forEach(function (group) {
-        var option = document.createElement("option");
-        option.value = group.id;
-        option.textContent = group.name || group.id;
-        controls.groupSelect.appendChild(option);
-      });
-      appendStatus("Loaded " + state.groups.length + " groups.");
-      
-      appendStatus("Loading exception rules...");
-      var rules = null;
-      try {
-        rules = await callApi("Get", {
-          typeName: "Rule",
-          resultsLimit: 5000
-        });
-      } catch (err) {
-        appendStatus("Could not load rules (non-critical): " + err.message);
-        rules = [];
-      }
-      
-      state.exceptionRules = Array.isArray(rules) ? rules : [];
-      controls.exceptionRuleSelect.innerHTML = "<option value=\"\">All rules</option>";
-      state.exceptionRules.forEach(function (rule) {
-        var option = document.createElement("option");
-        option.value = rule.id;
-        option.textContent = rule.name || rule.id;
-        controls.exceptionRuleSelect.appendChild(option);
-      });
-      
-      appendStatus("Metadata loaded successfully. Groups: " + state.groups.length + ", Rules: " + state.exceptionRules.length, "success");
-      return true;
-    } catch (err) {
-      var errMsg = (err && err.message) ? err.message : String(err);
-      appendStatus("ERROR loading metadata: " + errMsg, "error");
-      console.error("loadMetadata error:", err);
-      throw err;
-    }
-  }
-
-  function buildExceptionsDetailSearch(range, groupIds) {
+  function buildExceptionsDetailSearch(range) {
     var search = {
       fromDate: range.fromDate,
       toDate: range.toDate
     };
-    // Note: Some databases may not support these search parameters
-    // Omit if causing API errors
-    if (groupIds.length > 0) {
-      try {
-        search.deviceSearch = {
-          groups: groupIds.map(function (id) { return ({ id: id }); })
-        };
-      } catch (e) {
-        console.warn("Could not build deviceSearch:", e);
-      }
-    }
-    if (controls.exceptionRuleSelect.value) {
-      try {
-        search.ruleSearch = { id: controls.exceptionRuleSelect.value };
-      } catch (e) {
-        console.warn("Could not build ruleSearch:", e);
-      }
-    }
-    if (!controls.includeAcknowledged.checked) {
-      search.isAcknowledged = false;
-    }
     return search;
   }
 
-  async function fetchExceptionsDetail(range, groupIds) {
-    var search = buildExceptionsDetailSearch(range, groupIds);
+  async function fetchExceptionsDetail(range) {
+    var search = buildExceptionsDetailSearch(range);
     appendStatus("Fetching ExceptionsDetail report...");
     var rows = [];
     try {
@@ -232,21 +130,16 @@
     return rows;
   }
 
-  function buildHosLogSearch(range, groupIds) {
+  function buildHosLogSearch(range) {
     var search = {
       fromDate: range.fromDate,
       toDate: range.toDate
     };
-    if (groupIds.length > 0) {
-      search.userSearch = {
-        companyGroups: groupIds.map(function (id) { return ({ id: id }); })
-      };
-    }
     return search;
   }
 
-  async function fetchHosLog(range, groupIds) {
-    var search = buildHosLogSearch(range, groupIds);
+  async function fetchHosLog(range) {
+    var search = buildHosLogSearch(range);
     appendStatus("Fetching HOSLog report...");
     var rows = [];
     try {
@@ -270,11 +163,6 @@
         throw err2;
       }
     }
-    var statusFilter = controls.hosStatusFilter.value;
-    rows = rows.filter(function (row) {
-      if (!statusFilter) return true;
-      return (row.status || row.dutyStatus || "").toLowerCase() === statusFilter;
-    });
     appendStatus("HOSLog rows: " + rows.length);
     return rows;
   }
@@ -352,14 +240,12 @@
       controls.runExportBtn.disabled = true;
       controls.runExportBtn.textContent = "Generating...";
       var range = parseDateRange();
-      var groupIds = getSelectedGroupIds();
       appendStatus("Starting report pull for " + range.fromDate.toISOString() + " to " + range.toDate.toISOString());
-      appendStatus("Selected groups: " + (groupIds.length ? groupIds.join(", ") : "All"));
       if (!state.api) {
         throw new Error("This add-in must run inside MyGeotab to fetch report data.");
       }
-      var exceptionsRows = await fetchExceptionsDetail(range, groupIds);
-      var hosRows = await fetchHosLog(range, groupIds);
+      var exceptionsRows = await fetchExceptionsDetail(range);
+      var hosRows = await fetchHosLog(range);
       await exportWorkbook(exceptionsRows, hosRows);
     } catch (error) {
       var message = (error && error.message) ? error.message : String(error);
@@ -377,11 +263,6 @@
         setDateRangeFromPreset(controls.datePreset.value);
       }
     });
-    controls.loadMetaBtn.addEventListener("click", function () {
-      loadMetadata().catch(function (error) {
-        appendStatus("Metadata load failed: " + (error.message || String(error)), "error");
-      });
-    });
     controls.runExportBtn.addEventListener("click", function () {
       runExport();
     });
@@ -391,13 +272,8 @@
     controls.datePreset = $("datePreset");
     controls.fromDate = $("fromDate");
     controls.toDate = $("toDate");
-    controls.groupSelect = $("groupSelect");
-    controls.exceptionRuleSelect = $("exceptionRuleSelect");
-    controls.includeAcknowledged = $("includeAcknowledged");
-    controls.hosStatusFilter = $("hosStatusFilter");
     controls.templateFile = $("templateFile");
     controls.outputFileName = $("outputFileName");
-    controls.loadMetaBtn = $("loadMetaBtn");
     controls.runExportBtn = $("runExportBtn");
     controls.statusBox = $("statusBox");
     controls.envPill = $("envPill");
@@ -408,18 +284,9 @@
     setDateRangeFromPreset("last7");
     wireEvents();
     controls.runExportBtn.disabled = false;
-    controls.loadMetaBtn.disabled = false;
     if (state.api) {
       controls.envPill.textContent = "MyGeotab";
-      loadMetadata().then(function() {
-        appendStatus("Add-in ready.", "success");
-        controls.runExportBtn.disabled = false;
-        controls.loadMetaBtn.disabled = false;
-      }).catch(function (error) {
-        appendStatus("Metadata load failed: " + (error.message || String(error)), "error");
-        controls.runExportBtn.disabled = false;
-        controls.loadMetaBtn.disabled = false;
-      });
+      appendStatus("Add-in ready. Select a date range and generate the workbook.", "success");
     } else {
       controls.envPill.textContent = "Standalone";
       appendStatus("Running in standalone mode. Open inside MyGeotab add-in context to fetch report data.");

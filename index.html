@@ -8,6 +8,9 @@
   <script src="https://unpkg.com/xlsx-populate/browser/xlsx-populate.min.js"></script>
 </head>
 <body>
+  <aside class="dev-disclaimer" role="note" aria-label="Development disclaimer">
+    This tool is currently in development and is not ready for production use.
+  </aside>
   <div class="app-shell">
     <header class="app-header">
       <div class="brand-mark">G</div>
@@ -39,44 +42,6 @@
             <input id="toDate" type="date" />
           </label>
         </div>
-        <label class="field">
-          <span>Target Groups</span>
-          <select id="groupSelect" multiple size="8"></select>
-          <small>Use Ctrl/Cmd click to select multiple groups.</small>
-        </label>
-      </section>
-      <section class="panel">
-        <h2>Report Settings</h2>
-        <div class="sub-panel">
-          <h3>ExceptionsDetail</h3>
-          <div class="field-grid">
-            <label class="field">
-              <span>Exception Rule (optional)</span>
-              <select id="exceptionRuleSelect">
-                <option value="">All rules</option>
-              </select>
-            </label>
-            <label class="field checkbox-field">
-              <input id="includeAcknowledged" type="checkbox" checked />
-              <span>Include acknowledged</span>
-            </label>
-          </div>
-        </div>
-        <div class="sub-panel">
-          <h3>HOSLog</h3>
-          <div class="field-grid">
-            <label class="field">
-              <span>Status Filter</span>
-              <select id="hosStatusFilter">
-                <option value="">All statuses</option>
-                <option value="off">Off Duty</option>
-                <option value="sb">Sleeper Berth</option>
-                <option value="d">Driving</option>
-                <option value="on">On Duty</option>
-              </select>
-            </label>
-          </div>
-        </div>
       </section>
       <section class="panel">
         <h2>Template & Export</h2>
@@ -92,7 +57,6 @@
           </label>
         </div>
         <div class="button-row">
-          <button id="loadMetaBtn" class="btn secondary" disabled>Reload Groups & Rules</button>
           <button id="runExportBtn" class="btn primary" disabled>Generate Excel</button>
         </div>
         <pre id="statusBox" class="status-box">Initializing...</pre>
