@@ -178,11 +178,13 @@
   }
 
   function filterAndSortByDriver(rows) {
-    var withDriver = rows.filter(function (row) { return getDriverSortKey(row) !== null; });
-    withDriver.sort(function (a, b) {
-      return getDriverSortKey(a).localeCompare(getDriverSortKey(b));
+    var copy = rows.slice();
+    copy.sort(function (a, b) {
+      var ka = getDriverSortKey(a) || "\uffff";
+      var kb = getDriverSortKey(b) || "\uffff";
+      return ka.localeCompare(kb);
     });
-    return withDriver;
+    return copy;
   }
 
   // ── Excel export ────────────────────────────────────────────────────────────
@@ -238,9 +240,9 @@
         fetchHosLogs(range),
         fetchExceptions(range, selectedRuleIds)
       ]);
-      var flatHos = filterAndSortByDriver(flattenRows(hosRows));
-      var flatEx  = filterAndSortByDriver(flattenRows(exRows));
-      log("HOS by driver: " + flatHos.length + " | Exceptions by driver: " + flatEx.length);
+      var flatHos = flattenRows(hosRows);
+      var flatEx  = flattenRows(exRows);
+      log("HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
       buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
     } catch (err) {
       log("ERROR: " + (err.message || String(err)), "error");
