@@ -358,7 +358,7 @@ function initUI() {
 
 window.geotab = window.geotab || {};
 window.geotab.addin = window.geotab.addin || {};
-window.geotab.addin.dualReportExport = function (api) {
+window.geotab.addin.reportMerge = function (api) {
   return {
     initialize(freshApi, state, callback) {
       runtime.api = freshApi || api;
