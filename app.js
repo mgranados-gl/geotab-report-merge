@@ -117,7 +117,7 @@
       var opt = document.createElement("option");
       opt.value = rule.id;
       opt.textContent = rule.name;
-      opt.selected = true;
+      opt.selected = false;
       select.appendChild(opt);
     });
     container.innerHTML = "";
@@ -159,7 +159,7 @@
       var opt = document.createElement("option");
       opt.value = item.id;
       opt.textContent = item[labelField] || item.name || item.id;
-      opt.selected = true;
+      opt.selected = false;
       select.appendChild(opt);
     });
     container.innerHTML = "";
