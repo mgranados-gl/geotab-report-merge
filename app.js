@@ -5,8 +5,6 @@
   var _logs = [];
   var _rules = [];
   var _drivers = [];
-  var _vehicles = [];
-  var _groups = [];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -195,40 +193,6 @@
     }
   }
 
-  async function loadVehicles() {
-    var container = qs("vehiclesContainer");
-    if (container) container.innerHTML = '<p class="hint">Loading vehicles\u2026</p>';
-    try {
-      var raw = await callApi("Get", { typeName: "Device", resultsLimit: 50000 });
-      _vehicles = Array.isArray(raw) ? raw.filter(function (d) { return !!d.id; }) : [];
-      _vehicles.sort(function (a, b) {
-        var an = (a.name || "").toLowerCase();
-        var bn = (b.name || "").toLowerCase();
-        return an.localeCompare(bn);
-      });
-      populateEntitySelect("vehiclesContainer", "vehiclesSelect", _vehicles, "No vehicles found.", "name");
-      log("Loaded " + _vehicles.length + " vehicles.");
-    } catch (e) {
-      log("Could not load vehicles: " + e.message, "error");
-      if (container) container.innerHTML = '<p class="hint error-text">Failed to load vehicles.</p>';
-    }
-  }
-
-  async function loadGroups() {
-    var container = qs("groupsContainer");
-    if (container) container.innerHTML = '<p class="hint">Loading groups\u2026</p>';
-    try {
-      var raw = await callApi("Get", { typeName: "Group", resultsLimit: 50000 });
-      _groups = Array.isArray(raw) ? raw.filter(function (g) { return !!g.id && !!g.name; }) : [];
-      _groups.sort(function (a, b) { return a.name.localeCompare(b.name); });
-      populateEntitySelect("groupsContainer", "groupsSelect", _groups, "No groups found.", "name");
-      log("Loaded " + _groups.length + " groups.");
-    } catch (e) {
-      log("Could not load groups: " + e.message, "error");
-      if (container) container.innerHTML = '<p class="hint error-text">Failed to load groups.</p>';
-    }
-  }
-
   function getRefId(ref) {
     if (!ref) return null;
     if (typeof ref === "string") return ref;
@@ -240,73 +204,18 @@
     return getRefId(row.driver) || getRefId(row.user) || getRefId(row.userId) || null;
   }
 
-  function getRowVehicleId(row) {
-    return getRefId(row.device) || getRefId(row.vehicle) || getRefId(row.deviceId) || null;
-  }
-
-  function getRowGroupIds(row) {
-    var refs = [];
-    function addGroupRefs(value) {
-      if (!value) return;
-      if (Array.isArray(value)) {
-        value.forEach(addGroupRefs);
-        return;
-      }
-      if (typeof value === "object") {
-        var id = getRefId(value);
-        if (id) refs.push(id);
-      }
-    }
-    addGroupRefs(row.groups);
-    addGroupRefs(row.companyGroups);
-    if (row.driver) {
-      addGroupRefs(row.driver.groups);
-      addGroupRefs(row.driver.companyGroups);
-    }
-    if (row.user) {
-      addGroupRefs(row.user.groups);
-      addGroupRefs(row.user.companyGroups);
-    }
-    if (row.device) {
-      addGroupRefs(row.device.groups);
-      addGroupRefs(row.device.companyGroups);
-    }
-    return refs;
-  }
-
   function filterRows(rows, filters) {
     var driverSet = {};
-    var vehicleSet = {};
-    var groupSet = {};
     var i;
 
     for (i = 0; i < filters.driverIds.length; i++) driverSet[filters.driverIds[i]] = true;
-    for (i = 0; i < filters.vehicleIds.length; i++) vehicleSet[filters.vehicleIds[i]] = true;
-    for (i = 0; i < filters.groupIds.length; i++) groupSet[filters.groupIds[i]] = true;
 
     var hasDriverFilter = filters.driverIds.length > 0;
-    var hasVehicleFilter = filters.vehicleIds.length > 0;
-    var hasGroupFilter = filters.groupIds.length > 0;
 
     return rows.filter(function (row) {
       if (hasDriverFilter) {
         var driverId = getRowDriverId(row);
         if (!driverId || !driverSet[driverId]) return false;
-      }
-      if (hasVehicleFilter) {
-        var vehicleId = getRowVehicleId(row);
-        if (!vehicleId || !vehicleSet[vehicleId]) return false;
-      }
-      if (hasGroupFilter) {
-        var rowGroupIds = getRowGroupIds(row);
-        var hasMatch = false;
-        for (var g = 0; g < rowGroupIds.length; g++) {
-          if (groupSet[rowGroupIds[g]]) {
-            hasMatch = true;
-            break;
-          }
-        }
-        if (!hasMatch) return false;
       }
       return true;
     });
@@ -420,8 +329,6 @@
       var hosRows, exRows;
       var selectedRuleIds = getSelectedRuleIds();
       var selectedDriverIds = getSelectedIds("driversSelect");
-      var selectedVehicleIds = getSelectedIds("vehiclesSelect");
-      var selectedGroupIds = getSelectedIds("groupsSelect");
       if (selectedRuleIds.length === 0) {
         throw new Error("Please select at least one exception rule before running.");
       }
@@ -431,14 +338,10 @@
         fetchExceptions(range, selectedRuleIds)
       ]);
       hosRows = filterRows(hosRows, {
-        driverIds: selectedDriverIds,
-        vehicleIds: selectedVehicleIds,
-        groupIds: selectedGroupIds
+        driverIds: selectedDriverIds
       });
       exRows = filterRows(exRows, {
-        driverIds: selectedDriverIds,
-        vehicleIds: selectedVehicleIds,
-        groupIds: selectedGroupIds
+        driverIds: selectedDriverIds
       });
       var flatHos = flattenRows(hosRows);
       var flatEx  = flattenRows(exRows);
@@ -488,21 +391,15 @@
     }
 
     bindSelectButtons("selectAllDriversBtn", "clearDriversBtn", "driversSelect");
-    bindSelectButtons("selectAllVehiclesBtn", "clearVehiclesBtn", "vehiclesSelect");
-    bindSelectButtons("selectAllGroupsBtn", "clearGroupsBtn", "groupsSelect");
 
     if (_api) {
       log("Loading filters and exception rules\u2026");
       Promise.all([
         loadExceptionRules(),
-        loadDrivers(),
-        loadVehicles(),
-        loadGroups()
+        loadDrivers()
       ]).then(function () {
         clearSelection("rulesSelect");
         clearSelection("driversSelect");
-        clearSelection("vehiclesSelect");
-        clearSelection("groupsSelect");
         log("Default selections cleared on load.");
         if (btn) btn.disabled = false;
       });

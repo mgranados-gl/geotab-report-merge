@@ -196,9 +196,7 @@ body {
   color: var(--text);
 }
 
-#driversSelect,
-#vehiclesSelect,
-#groupsSelect {
+#driversSelect {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
