@@ -144,6 +144,14 @@
     return ids;
   }
 
+  function clearSelection(selectId) {
+    var select = qs(selectId);
+    if (!select) return;
+    for (var i = 0; i < select.options.length; i++) {
+      select.options[i].selected = false;
+    }
+  }
+
   function populateEntitySelect(containerId, selectId, items, noRowsText, labelField) {
     var container = qs(containerId);
     if (!container) return;
@@ -491,6 +499,11 @@
         loadVehicles(),
         loadGroups()
       ]).then(function () {
+        clearSelection("rulesSelect");
+        clearSelection("driversSelect");
+        clearSelection("vehiclesSelect");
+        clearSelection("groupsSelect");
+        log("Default selections cleared on load.");
         if (btn) btn.disabled = false;
       });
     } else {
