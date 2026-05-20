@@ -335,22 +335,55 @@
 
   // ── Excel export ────────────────────────────────────────────────────────────
 
-  function buildAndDownloadWorkbook(hosRows, exRows, dateLabel) {
+  function getTemplateUrl() {
+    // Construct the template URL based on the current page location
+    var currentUrl = window.location.href;
+    var baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf("/"));
+    return baseUrl + "/templates/GapReportTemplate.xlsx";
+  }
+
+  async function buildAndDownloadWorkbook(hosRows, exRows, dateLabel) {
     if (typeof XLSX === "undefined") {
       throw new Error("SheetJS (XLSX) library not loaded.");
     }
     log("Building workbook…");
-    var wb = XLSX.utils.book_new();
+    var wb;
+    var templateUrl = getTemplateUrl();
 
+    try {
+      // Fetch and load the template
+      log("Loading template from " + templateUrl + "…");
+      var response = await fetch(templateUrl);
+      if (!response.ok) {
+        throw new Error("Failed to load template: " + response.statusText);
+      }
+      var arrayBuffer = await response.arrayBuffer();
+      wb = XLSX.read(arrayBuffer, { type: "array" });
+      log("Template loaded successfully.");
+    } catch (e) {
+      log("Warning: Could not load template (" + e.message + "), creating blank workbook…");
+      wb = XLSX.utils.book_new();
+    }
+
+    // Populate or create Data1 sheet with HOS logs
     var ws1 = hosRows.length
       ? XLSX.utils.json_to_sheet(hosRows)
       : XLSX.utils.aoa_to_sheet([["No HOS log data for this date."]]);
-    XLSX.utils.book_append_sheet(wb, ws1, "Data1");
+    if (wb.Sheets["Data1"]) {
+      wb.Sheets["Data1"] = ws1;
+    } else {
+      XLSX.utils.book_append_sheet(wb, ws1, "Data1");
+    }
 
+    // Populate or create Data2 sheet with exceptions
     var ws2 = exRows.length
       ? XLSX.utils.json_to_sheet(exRows)
       : XLSX.utils.aoa_to_sheet([["No exception data for this date."]]);
-    XLSX.utils.book_append_sheet(wb, ws2, "Data2");
+    if (wb.Sheets["Data2"]) {
+      wb.Sheets["Data2"] = ws2;
+    } else {
+      XLSX.utils.book_append_sheet(wb, ws2, "Data2");
+    }
 
     var wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     var blob = new Blob([wbout], { type: "application/octet-stream" });
