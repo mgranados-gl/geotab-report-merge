@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.8";
+  var APP_VERSION = "1.0.9";
 
   var _api = null;
   var _logs = [];
@@ -287,6 +287,22 @@
     }
   }
 
+  async function fetchRuleMap() {
+    try {
+      log("Fetching rule details…");
+      var raw = await callApi("Get", { typeName: "Rule", resultsLimit: 5000 });
+      var map = {};
+      if (Array.isArray(raw)) {
+        raw.forEach(function (r) { if (r.id) map[r.id] = r; });
+      }
+      log("Rule details loaded: " + Object.keys(map).length + " rules.");
+      return map;
+    } catch (e) {
+      log("Warning: Could not fetch rule details: " + e.message);
+      return {};
+    }
+  }
+
   // ── HOS row mapping ─────────────────────────────────────────────────────────
   // Maps raw DutyStatusLog API objects to clean, human-readable columns
   // matching the built-in Geotab HOS Log report format.
@@ -312,6 +328,31 @@
       "Origin":          row.origin || "",
       "Sequence":        row.sequence || "",
       "Id":              row.id || ""
+    };
+  }
+
+  function mapExceptionRow(row, driverMap, deviceMap, ruleMap) {
+    var driverId = row.driver && row.driver.id ? row.driver.id : null;
+    var driver = driverId ? (driverMap[driverId] || {}) : {};
+    var deviceId = row.device && row.device.id ? row.device.id : null;
+    var device = deviceId ? (deviceMap[deviceId] || {}) : {};
+    var ruleId = row.rule && row.rule.id ? row.rule.id : null;
+    var rule = ruleId ? (ruleMap[ruleId] || {}) : {};
+
+    // Duration comes as ISO 8601 duration string e.g. "PT5M3S" — keep as-is; Excel can display it
+    // Distance is already in km per API docs
+    return {
+      "ActiveFrom":       row.activeFrom || "",
+      "ActiveTo":         row.activeTo || "",
+      "Duration":         row.duration || "",
+      "Distance_km":      row.distance != null ? Math.round(row.distance * 10) / 10 : "",
+      "RuleName":         rule.name || ruleId || "",
+      "DriverFirstName":  driver.firstName || driver.name || "",
+      "DriverLastName":   driver.lastName || "",
+      "DriverUserName":   driver.userName || "",
+      "Vehicle":          device.name || deviceId || "",
+      "DeviceComment":    device.comment || "",
+      "Id":               row.id || ""
     };
   }
 
@@ -468,17 +509,18 @@
       log("Fetching HOS logs (ON, D, INT_D, Login, Logoff states only) for all drivers…");
       log("Fetching exception events (Entering/Exiting Zone Office) for all drivers…");
       
-      var driverMap, deviceMap;
-      [hosRows, exRows, driverMap, deviceMap] = await Promise.all([
+      var driverMap, deviceMap, ruleMap;
+      [hosRows, exRows, driverMap, deviceMap, ruleMap] = await Promise.all([
         fetchHosLogs(range),
         fetchExceptions(range),
         fetchDriverMap(),
-        fetchDeviceMap()
+        fetchDeviceMap(),
+        fetchRuleMap()
       ]);
       
-      // Map HOS rows to clean human-readable columns; flatten exception rows as-is
+      // Map rows to clean human-readable columns
       var flatHos = hosRows.map(function (row) { return mapHosRow(row, driverMap, deviceMap); });
-      var flatEx  = flattenRows(exRows);
+      var flatEx  = exRows.map(function (row) { return mapExceptionRow(row, driverMap, deviceMap, ruleMap); });
       log("Final data — HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
       buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
     } catch (err) {
