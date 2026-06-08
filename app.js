@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.5";
+  var APP_VERSION = "1.0.6";
 
   var _api = null;
   var _logs = [];
@@ -403,7 +403,7 @@
       var hosRows, exRows;
       
       log("Running report for yesterday (" + dateLabel + "), using time zone: " + (userTimeZone || "default") + "…");
-      log("Fetching HOS logs (On, Drive, Login/logout states only) for all drivers…");
+      log("Fetching HOS logs (ON, D, INT_D, Login, Logoff states only) for all drivers…");
       log("Fetching exception events (Entering/Exiting Zone Office) for all drivers…");
       
       [hosRows, exRows] = await Promise.all([
@@ -457,7 +457,7 @@
               var tzEl = qs("tzValue");
               if (tzEl) tzEl.textContent = "Unavailable";
             });          log("Report configured: Yesterday's date, User's time zone, All drivers.");
-          log("HOS: On, Drive, Login/logout states only.");
+          log("HOS: ON, D, INT_D, Login, Logoff states only.");
           log("Exceptions: Entering Zone (Office) and Exiting Zone (Office) rules.");
           if (btn) btn.disabled = false;
         } else {
