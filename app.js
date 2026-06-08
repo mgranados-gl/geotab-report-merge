@@ -73,8 +73,8 @@
     var rows = Array.isArray(raw) ? raw : [];
     log("HOS logs fetched: " + rows.length + " rows.");
     
-    // Filter by allowed states: ON, OFF, D, Int_D, Login, Logout
-    var allowedStates = ["On", "Drive", "IntermediateDrive", "Login/logout"];
+    // Filter by allowed states: ON, D, Int_D, Login, Logout
+    var allowedStates = ["ON", "D", "Int_D", "Login", "Logout"];
     rows = rows.filter(function (row) {
       var state = row.state || row.dutystatus || "";
       return allowedStates.indexOf(state) >= 0;
