@@ -14,7 +14,7 @@
     <header class="report-header">
       <div class="brand-mark">G</div>
       <div class="brand-copy">
-        <h1>Gridline | Gap Report</h1>
+        <h1>Gridline | Gap Report <span id="appVersion" style="font-size:0.55em;font-weight:400;opacity:0.6;"></span></h1>
         <p>Pulls yesterday's HOS logs and exception events into a single Excel workbook.</p>
       </div>
     </header>
@@ -59,6 +59,6 @@
     if (typeof geotab === "undefined") { window.geotab = { addin: {} }; }
   </script>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=1.0.2"></script>
 </body>
 </html>

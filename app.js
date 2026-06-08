@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  var APP_VERSION = "1.0.2";
+
   var _api = null;
   var _logs = [];
   var _rules = [];
@@ -71,8 +73,8 @@
     var rows = Array.isArray(raw) ? raw : [];
     log("HOS logs fetched: " + rows.length + " rows.");
     
-    // Filter by allowed states: On, Drive, Login/logout
-    var allowedStates = ["On", "Drive", "Login/logout"];
+    // Filter by allowed states: ON, OFF, D, Int_D, Login, Logout
+    var allowedStates = ["On", "Drive", "IntermediateDrive", "Login/logout"];
     rows = rows.filter(function (row) {
       var state = row.state || row.dutystatus || "";
       return allowedStates.indexOf(state) >= 0;
@@ -278,8 +280,16 @@
   // ── Excel export ────────────────────────────────────────────────────────────
 
   function getTemplateUrl() {
-    // Construct the template URL based on the current page location
-    var currentUrl = window.location.href;
+    // Derive base URL from app.js script src (most reliable inside Geotab iframes)
+    var scripts = document.getElementsByTagName("script");
+    for (var i = 0; i < scripts.length; i++) {
+      var src = scripts[i].src;
+      if (src && src.indexOf("app.js") !== -1) {
+        return src.substring(0, src.lastIndexOf("/")) + "/templates/GapReportTemplate.xlsx";
+      }
+    }
+    // Fallback: strip query string and hash before deriving base
+    var currentUrl = window.location.href.split("?")[0].split("#")[0];
     var baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf("/"));
     return baseUrl + "/templates/GapReportTemplate.xlsx";
   }
@@ -297,13 +307,13 @@
       log("Loading template from " + templateUrl + "…");
       var response = await fetch(templateUrl);
       if (!response.ok) {
-        throw new Error("Failed to load template: " + response.statusText);
+        throw new Error("Failed to load template: HTTP " + response.status + (response.statusText ? " " + response.statusText : ""));
       }
       var arrayBuffer = await response.arrayBuffer();
-      wb = XLSX.read(arrayBuffer, { type: "array" });
+      wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
       log("Template loaded successfully.");
     } catch (e) {
-      log("Warning: Could not load template (" + e.message + "), creating blank workbook…");
+      log("Warning: Could not load template (" + e.message + "), creating blank workbook (Notification and Summary tabs will be missing)…", "error");
       wb = XLSX.utils.book_new();
     }
 
@@ -400,6 +410,8 @@
   // ── UI init ─────────────────────────────────────────────────────────────────
 
   function initUi() {
+    var versionEl = qs("appVersion");
+    if (versionEl) versionEl.textContent = "v" + APP_VERSION;
     var range = getYesterdayRange(null);
     var label = qs("dateLabel");
     if (label) label.textContent = formatDisplayDate(range.fromDate);
