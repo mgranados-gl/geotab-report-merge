@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.6";
+  var APP_VERSION = "1.0.7";
 
   var _api = null;
   var _logs = [];
@@ -315,7 +315,7 @@
         throw new Error("Failed to load template: HTTP " + response.status + (response.statusText ? " " + response.statusText : ""));
       }
       var arrayBuffer = await response.arrayBuffer();
-      wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
+      wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array", cellStyles: true, cellFormula: true, cellDates: true });
       log("Template loaded successfully.");
     } catch (e) {
       log("Warning: Could not load template (" + e.message + "), creating blank workbook (Notification and Summary tabs will be missing)…", "error");
@@ -354,7 +354,7 @@
       XLSX.utils.book_append_sheet(wb, ws2, "Data2");
     }
 
-    var wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    var wbout = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
     var blob = new Blob([wbout], { type: "application/octet-stream" });
     var fileName = "GapReport-" + dateLabel + ".xlsx";
     var link = document.createElement("a");
