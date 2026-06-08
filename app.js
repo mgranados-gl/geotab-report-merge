@@ -349,25 +349,27 @@
     _logs = [];
     try {
       if (!_api) throw new Error("Add-in must run inside MyGeotab to access the API.");
-      
-      // Get user's session and verify access
-      var session = await callApi("GetSession", {});
-      var userName = session && session.userName ? session.userName.toLowerCase() : null;
-      
+
+      // Get user's session via the add-in session method
+      var credentials = await new Promise(function (resolve) { _api.getSession(resolve); });
+      var userName = credentials && credentials.userName ? credentials.userName.toLowerCase() : null;
+
       // Whitelist of allowed test users
       var allowedUsers = ["mgranados@gridline.com", "eborden@gridline.com"];
       var allowedUsersLower = allowedUsers.map(function (u) { return u.toLowerCase(); });
-      
+
       if (!userName || allowedUsersLower.indexOf(userName) < 0) {
         setBannerStatus("denied", "✗ Access denied for " + (userName || "unknown user"));
         log("Access denied: " + (userName || "Unknown user") + " is not authorized to run this report.", "error");
         throw new Error("Unauthorized user.");
       }
-      
-      setBannerStatus("permitted", "✓ Access permitted for " + (session.userName || "user"));
+
+      setBannerStatus("permitted", "✓ Access permitted for " + (credentials.userName || "user"));
       log("Access granted for " + userName + ".");
-      
-      var userTimeZone = session && session.timeZone ? session.timeZone : null;
+
+      // Time zone comes from the MyGeotab User record, fetched separately
+      var userRecord = await callApi("Get", { typeName: "User", search: { name: credentials.userName }, resultsLimit: 1 });
+      var userTimeZone = userRecord && userRecord[0] && userRecord[0].timeZoneId ? userRecord[0].timeZoneId : null;
       
       var range = getYesterdayRange(userTimeZone);
       var dateLabel = range.fromDate.toISOString().slice(0, 10);
@@ -408,30 +410,24 @@
     }
 
     if (_api) {
-      // Check user access on initialization
-      callApi("GetSession", {})
-        .then(function (session) {
-          var userName = session && session.userName ? session.userName.toLowerCase() : null;
-          var allowedUsers = ["mgranados@gridline.com", "eborden@gridline.com"];
-          var allowedUsersLower = allowedUsers.map(function (u) { return u.toLowerCase(); });
-          
-          if (userName && allowedUsersLower.indexOf(userName) >= 0) {
-            setBannerStatus("permitted", "✓ Access permitted for " + (session.userName || "user"));
-            log("Report configured: Yesterday's date, User's time zone, All drivers.");
-            log("HOS: On, Drive, Login/logout states only.");
-            log("Exceptions: Entering Zone (Office) and Exiting Zone (Office) rules.");
-            if (btn) btn.disabled = false;
-          } else {
-            setBannerStatus("denied", "✗ Access denied for " + (userName || "unknown user"));
-            log("ERROR: Access denied. Only authorized testers can run this report.", "error");
-            if (btn) btn.disabled = true;
-          }
-        })
-        .catch(function (err) {
-          setBannerStatus("denied", "✗ Could not verify access.");
-          log("ERROR: Could not check access: " + err.message, "error");
+      // Check user access on initialization using the add-in session method
+      _api.getSession(function (credentials) {
+        var userName = credentials && credentials.userName ? credentials.userName.toLowerCase() : null;
+        var allowedUsers = ["mgranados@gridline.com", "eborden@gridline.com"];
+        var allowedUsersLower = allowedUsers.map(function (u) { return u.toLowerCase(); });
+
+        if (userName && allowedUsersLower.indexOf(userName) >= 0) {
+          setBannerStatus("permitted", "✓ Access permitted for " + (credentials.userName || "user"));
+          log("Report configured: Yesterday's date, User's time zone, All drivers.");
+          log("HOS: On, Drive, Login/logout states only.");
+          log("Exceptions: Entering Zone (Office) and Exiting Zone (Office) rules.");
+          if (btn) btn.disabled = false;
+        } else {
+          setBannerStatus("denied", "✗ Access denied for " + (userName || "unknown user"));
+          log("ERROR: Access denied. Only authorized testers can run this report.", "error");
           if (btn) btn.disabled = true;
-        });
+        }
+      });
     } else {
       setBannerStatus("pending", "Opening in MyGeotab to check access…");
       log("Standalone preview - open inside MyGeotab to run reports.");
