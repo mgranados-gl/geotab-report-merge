@@ -417,8 +417,17 @@
         var allowedUsersLower = allowedUsers.map(function (u) { return u.toLowerCase(); });
 
         if (userName && allowedUsersLower.indexOf(userName) >= 0) {
-          setBannerStatus("permitted", "✓ Access permitted for " + (credentials.userName || "user"));
-          log("Report configured: Yesterday's date, User's time zone, All drivers.");
+          setBannerStatus("permitted", "✓ Access permitted for " + (credentials.userName || "user"));          // Fetch actual user time zone and display it
+          callApi("Get", { typeName: "User", search: { name: credentials.userName }, resultsLimit: 1 })
+            .then(function (result) {
+              var tz = result && result[0] && result[0].timeZoneId ? result[0].timeZoneId : "Unknown";
+              var tzEl = qs("tzValue");
+              if (tzEl) tzEl.textContent = tz;
+            })
+            .catch(function () {
+              var tzEl = qs("tzValue");
+              if (tzEl) tzEl.textContent = "Unavailable";
+            });          log("Report configured: Yesterday's date, User's time zone, All drivers.");
           log("HOS: On, Drive, Login/logout states only.");
           log("Exceptions: Entering Zone (Office) and Exiting Zone (Office) rules.");
           if (btn) btn.disabled = false;
