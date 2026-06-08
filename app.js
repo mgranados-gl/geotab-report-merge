@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.7";
+  var APP_VERSION = "1.0.8";
 
   var _api = null;
   var _logs = [];
@@ -253,6 +253,68 @@
     });
   }
 
+  // ── Lookup maps ─────────────────────────────────────────────────────────────
+
+  async function fetchDriverMap() {
+    try {
+      log("Fetching driver details…");
+      var raw = await callApi("Get", { typeName: "User", resultsLimit: 50000 });
+      var map = {};
+      if (Array.isArray(raw)) {
+        raw.forEach(function (u) { if (u.id) map[u.id] = u; });
+      }
+      log("Driver details loaded: " + Object.keys(map).length + " users.");
+      return map;
+    } catch (e) {
+      log("Warning: Could not fetch driver details: " + e.message);
+      return {};
+    }
+  }
+
+  async function fetchDeviceMap() {
+    try {
+      log("Fetching vehicle details…");
+      var raw = await callApi("Get", { typeName: "Device", resultsLimit: 50000 });
+      var map = {};
+      if (Array.isArray(raw)) {
+        raw.forEach(function (d) { if (d.id) map[d.id] = d; });
+      }
+      log("Vehicle details loaded: " + Object.keys(map).length + " vehicles.");
+      return map;
+    } catch (e) {
+      log("Warning: Could not fetch vehicle details: " + e.message);
+      return {};
+    }
+  }
+
+  // ── HOS row mapping ─────────────────────────────────────────────────────────
+  // Maps raw DutyStatusLog API objects to clean, human-readable columns
+  // matching the built-in Geotab HOS Log report format.
+
+  function mapHosRow(row, driverMap, deviceMap) {
+    var driverId = row.driver && row.driver.id ? row.driver.id : null;
+    var driver = driverId ? (driverMap[driverId] || {}) : {};
+    var deviceId = row.device && row.device.id ? row.device.id : null;
+    var device = deviceId ? (deviceMap[deviceId] || {}) : {};
+    var loc = row.location || {};
+    var odometerKm = row.odometer ? Math.round(row.odometer / 1000 * 10) / 10 : "";
+    var engineHrs = row.engineHours ? Math.round(row.engineHours / 3600 * 100) / 100 : "";
+    return {
+      "DateTime":        row.dateTime || "",
+      "Status":          row.status || "",
+      "DriverFirstName": driver.firstName || driver.name || "",
+      "DriverLastName":  driver.lastName || "",
+      "DriverUserName":  driver.userName || "",
+      "Vehicle":         device.name || deviceId || "",
+      "Location":        loc.address || (loc.y != null ? loc.y + ", " + loc.x : ""),
+      "Odometer_km":     odometerKm,
+      "EngineHours":     engineHrs,
+      "Origin":          row.origin || "",
+      "Sequence":        row.sequence || "",
+      "Id":              row.id || ""
+    };
+  }
+
   // ── Flattening ──────────────────────────────────────────────────────────────
   // Recursively flattens nested objects so each row is a plain key→value map.
   // Arrays are JSON-stringified; Date objects are left as-is for SheetJS.
@@ -406,13 +468,16 @@
       log("Fetching HOS logs (ON, D, INT_D, Login, Logoff states only) for all drivers…");
       log("Fetching exception events (Entering/Exiting Zone Office) for all drivers…");
       
-      [hosRows, exRows] = await Promise.all([
+      var driverMap, deviceMap;
+      [hosRows, exRows, driverMap, deviceMap] = await Promise.all([
         fetchHosLogs(range),
-        fetchExceptions(range)
+        fetchExceptions(range),
+        fetchDriverMap(),
+        fetchDeviceMap()
       ]);
       
-      // All drivers are included (no driver filtering)
-      var flatHos = flattenRows(hosRows);
+      // Map HOS rows to clean human-readable columns; flatten exception rows as-is
+      var flatHos = hosRows.map(function (row) { return mapHosRow(row, driverMap, deviceMap); });
       var flatEx  = flattenRows(exRows);
       log("Final data — HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
       buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
