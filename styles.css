@@ -20,6 +20,37 @@ body {
   background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
 }
 
+.access-banner {
+  width: 100%;
+  padding: 12px 24px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.access-banner--pending {
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #f59e0b;
+}
+
+.access-banner--permitted {
+  background: #dcfce7;
+  color: #166534;
+  border-bottom: 1px solid #86efac;
+}
+
+.access-banner--denied {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-bottom: 1px solid #fca5a5;
+}
+
+.access-banner__text {
+  display: inline-block;
+}
+
 .shell {
   max-width: 640px;
   margin: 32px auto;
