@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.4";
+  var APP_VERSION = "1.0.5";
 
   var _api = null;
   var _logs = [];
@@ -75,13 +75,13 @@
     
     // Log a sample of raw state values to verify what the API returns
     var sampleStates = {};
-    rows.forEach(function (row) { sampleStates[row.state || row.dutystatus || "(none)"] = true; });
+    rows.forEach(function (row) { sampleStates[row.status || row.state || row.dutystatus || "(none)"] = true; });
     log("Raw state values from API: " + Object.keys(sampleStates).join(", "));
 
     // Filter by allowed states (Geotab API enum values)
     var allowedStates = ["ON", "D", "INT_D", "Login", "Logoff"];
     rows = rows.filter(function (row) {
-      var state = row.state || row.dutystatus || "";
+    var state = row.status || row.state || row.dutystatus || "";
       return allowedStates.indexOf(state) >= 0;
     });
     log("After state filter: " + rows.length + " rows.");
@@ -323,22 +323,34 @@
     }
 
     // Populate or create Data1 sheet with HOS logs
-    var ws1 = hosRows.length
-      ? XLSX.utils.json_to_sheet(hosRows)
-      : XLSX.utils.aoa_to_sheet([["No HOS log data for this date."]]);
+    // Write into the existing sheet (preserves template styles on other sheets)
     if (wb.Sheets["Data1"]) {
-      wb.Sheets["Data1"] = ws1;
+      // Clear existing data range then write new data starting at A1
+      var ws1 = wb.Sheets["Data1"];
+      if (hosRows.length) {
+        XLSX.utils.sheet_add_json(ws1, hosRows, { origin: "A1", skipHeader: false });
+      } else {
+        XLSX.utils.sheet_add_aoa(ws1, [["No HOS log data for this date."]], { origin: "A1" });
+      }
     } else {
+      var ws1 = hosRows.length
+        ? XLSX.utils.json_to_sheet(hosRows)
+        : XLSX.utils.aoa_to_sheet([["No HOS log data for this date."]]);
       XLSX.utils.book_append_sheet(wb, ws1, "Data1");
     }
 
     // Populate or create Data2 sheet with exceptions
-    var ws2 = exRows.length
-      ? XLSX.utils.json_to_sheet(exRows)
-      : XLSX.utils.aoa_to_sheet([["No exception data for this date."]]);
     if (wb.Sheets["Data2"]) {
-      wb.Sheets["Data2"] = ws2;
+      var ws2 = wb.Sheets["Data2"];
+      if (exRows.length) {
+        XLSX.utils.sheet_add_json(ws2, exRows, { origin: "A1", skipHeader: false });
+      } else {
+        XLSX.utils.sheet_add_aoa(ws2, [["No exception data for this date."]], { origin: "A1" });
+      }
     } else {
+      var ws2 = exRows.length
+        ? XLSX.utils.json_to_sheet(exRows)
+        : XLSX.utils.aoa_to_sheet([["No exception data for this date."]]);
       XLSX.utils.book_append_sheet(wb, ws2, "Data2");
     }
 
