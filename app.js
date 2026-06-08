@@ -341,8 +341,21 @@
     try {
       if (!_api) throw new Error("Add-in must run inside MyGeotab to access the API.");
       
-      // Get user's session to retrieve time zone
+      // Get user's session and verify access
       var session = await callApi("GetSession", {});
+      var userName = session && session.userName ? session.userName.toLowerCase() : null;
+      
+      // Whitelist of allowed test users
+      var allowedUsers = ["mgranados@gridline.com", "eborden@gridline.com"];
+      var allowedUsersLower = allowedUsers.map(function (u) { return u.toLowerCase(); });
+      
+      if (!userName || allowedUsersLower.indexOf(userName) < 0) {
+        log("Access denied: " + (userName || "Unknown user") + " is not authorized to run this report.", "error");
+        throw new Error("Unauthorized user.");
+      }
+      
+      log("Access granted for " + userName + ".");
+      
       var userTimeZone = session && session.timeZone ? session.timeZone : null;
       
       var range = getYesterdayRange(userTimeZone);

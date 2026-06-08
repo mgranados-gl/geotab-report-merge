@@ -27,6 +27,14 @@ MyGeotab add-in that pulls yesterday's HOS logs and exception events into a sing
    - `https://mgranados-gl.github.io/geotab-report-merge/`
 4. Copy configuration from `addin.sample.json` into MyGeotab Add-In settings.
 
+## Testing Access Control
+
+During testing, only authorized users can run the report:
+- **mgranados@gridline.com**
+- **eborden@gridline.com**
+
+Other users will see an "Access denied" message. To add more test users, update the `allowedUsers` array in `app.js` (runReport function).
+
 ## Usage
 
 1. Open the add-in in MyGeotab (must be authenticated)
