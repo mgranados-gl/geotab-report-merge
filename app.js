@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.3";
+  var APP_VERSION = "1.0.4";
 
   var _api = null;
   var _logs = [];
@@ -79,7 +79,7 @@
     log("Raw state values from API: " + Object.keys(sampleStates).join(", "));
 
     // Filter by allowed states (Geotab API enum values)
-    var allowedStates = ["On", "Drive", "IntermediateDrive", "Login/logout"];
+    var allowedStates = ["ON", "D", "INT_D", "Login", "Logoff"];
     rows = rows.filter(function (row) {
       var state = row.state || row.dutystatus || "";
       return allowedStates.indexOf(state) >= 0;
