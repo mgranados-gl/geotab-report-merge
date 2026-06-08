@@ -10,12 +10,18 @@
 
   function qs(id) { return document.getElementById(id); }
 
-  function getYesterdayRange() {
+  function getYesterdayRange(userTimeZone) {
+    // Get today and yesterday in the user's time zone
     var today = new Date();
-    today.setHours(0, 0, 0, 0);
     var yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    return { fromDate: yesterday, toDate: today };
+
+    // Format dates as UTC-equivalent for the user's timezone
+    // This ensures the dates are interpreted in the user's local timezone
+    var fromDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0, 0);
+    var toDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+
+    return { fromDate: fromDate, toDate: toDate, userTimeZone: userTimeZone };
   }
 
   function formatDisplayDate(dateObj) {
@@ -55,10 +61,19 @@
     var raw = await callApi("Get", { typeName: "DutyStatusLog", search: search, resultsLimit: 50000 });
     var rows = Array.isArray(raw) ? raw : [];
     log("HOS logs fetched: " + rows.length + " rows.");
+    
+    // Filter by allowed states: On, Drive, Login/logout
+    var allowedStates = ["On", "Drive", "Login/logout"];
+    rows = rows.filter(function (row) {
+      var state = row.state || row.dutystatus || "";
+      return allowedStates.indexOf(state) >= 0;
+    });
+    log("After state filter: " + rows.length + " rows.");
+    
     return rows;
   }
 
-  async function fetchExceptions(range, selectedRuleIds) {
+  async function fetchExceptions(range) {
     var search = { fromDate: range.fromDate, toDate: range.toDate };
     var raw;
     try {
@@ -68,18 +83,19 @@
       raw = await callApi("Get", { typeName: "ExceptionDetail", search: search, resultsLimit: 50000 });
     }
     var rows = Array.isArray(raw) ? raw : [];
-    if (selectedRuleIds && selectedRuleIds.length > 0) {
-      var idSet = {};
-      selectedRuleIds.forEach(function (id) { idSet[id] = true; });
-      rows = rows.filter(function (row) {
-        var ruleId = row.rule && row.rule.id ? row.rule.id
-          : row.ruleId ? row.ruleId : null;
-        return ruleId && idSet[ruleId];
-      });
-      log("After rule filter: " + rows.length + " rows.");
-    } else {
-      log("Exceptions fetched: " + rows.length + " rows.");
-    }
+    log("Exceptions fetched: " + rows.length + " rows.");
+    
+    // Filter by hardcoded rule IDs (Entering Zone Office and Exiting Zone Office)
+    var targetRuleIds = ["aoL1tECTjFEqNGLqrZ_F8Ew", "a4cQ5-5kHtkOTFz8HKO2iXQ"];
+    var idSet = {};
+    targetRuleIds.forEach(function (id) { idSet[id] = true; });
+    rows = rows.filter(function (row) {
+      var ruleId = row.rule && row.rule.id ? row.rule.id
+        : row.ruleId ? row.ruleId : null;
+      return ruleId && idSet[ruleId];
+    });
+    log("After rule filter (Entering/Exiting Zone Office): " + rows.length + " rows.");
+    
     return rows;
   }
 
@@ -324,28 +340,28 @@
     _logs = [];
     try {
       if (!_api) throw new Error("Add-in must run inside MyGeotab to access the API.");
-      var range = getYesterdayRange();
+      
+      // Get user's session to retrieve time zone
+      var session = await callApi("GetSession", {});
+      var userTimeZone = session && session.timeZone ? session.timeZone : null;
+      
+      var range = getYesterdayRange(userTimeZone);
       var dateLabel = range.fromDate.toISOString().slice(0, 10);
       var hosRows, exRows;
-      var selectedRuleIds = getSelectedRuleIds();
-      var selectedDriverIds = getSelectedIds("driversSelect");
-      if (selectedRuleIds.length === 0) {
-        throw new Error("Please select at least one exception rule before running.");
-      }
-      log("Running for " + selectedRuleIds.length + " selected rule(s)\u2026");
+      
+      log("Running report for yesterday (" + dateLabel + "), using time zone: " + (userTimeZone || "default") + "…");
+      log("Fetching HOS logs (On, Drive, Login/logout states only) for all drivers…");
+      log("Fetching exception events (Entering/Exiting Zone Office) for all drivers…");
+      
       [hosRows, exRows] = await Promise.all([
         fetchHosLogs(range),
-        fetchExceptions(range, selectedRuleIds)
+        fetchExceptions(range)
       ]);
-      hosRows = filterRows(hosRows, {
-        driverIds: selectedDriverIds
-      });
-      exRows = filterRows(exRows, {
-        driverIds: selectedDriverIds
-      });
+      
+      // All drivers are included (no driver filtering)
       var flatHos = flattenRows(hosRows);
       var flatEx  = flattenRows(exRows);
-      log("After filters \u2014 HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
+      log("Final data — HOS rows: " + flatHos.length + " | Exception rows: " + flatEx.length);
       buildAndDownloadWorkbook(flatHos, flatEx, dateLabel);
     } catch (err) {
       log("ERROR: " + (err.message || String(err)), "error");
@@ -358,7 +374,7 @@
   // ── UI init ─────────────────────────────────────────────────────────────────
 
   function initUi() {
-    var range = getYesterdayRange();
+    var range = getYesterdayRange(null);
     var label = qs("dateLabel");
     if (label) label.textContent = formatDisplayDate(range.fromDate);
     var btn = qs("runBtn");
@@ -366,45 +382,14 @@
       btn.disabled = true;
       btn.addEventListener("click", runReport);
     }
-    var selectAll = qs("selectAllBtn");
-    var clearAll  = qs("clearAllBtn");
-    if (selectAll) selectAll.addEventListener("click", function () {
-      var sel = qs("rulesSelect");
-      if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true;
-    });
-    if (clearAll) clearAll.addEventListener("click", function () {
-      var sel = qs("rulesSelect");
-      if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
-    });
-
-    function bindSelectButtons(selectAllId, clearId, selectId) {
-      var selectAllBtn = qs(selectAllId);
-      var clearBtn = qs(clearId);
-      if (selectAllBtn) selectAllBtn.addEventListener("click", function () {
-        var sel = qs(selectId);
-        if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true;
-      });
-      if (clearBtn) clearBtn.addEventListener("click", function () {
-        var sel = qs(selectId);
-        if (sel) for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
-      });
-    }
-
-    bindSelectButtons("selectAllDriversBtn", "clearDriversBtn", "driversSelect");
 
     if (_api) {
-      log("Loading filters and exception rules\u2026");
-      Promise.all([
-        loadExceptionRules(),
-        loadDrivers()
-      ]).then(function () {
-        clearSelection("rulesSelect");
-        clearSelection("driversSelect");
-        log("Default selections cleared on load.");
-        if (btn) btn.disabled = false;
-      });
+      log("Report configured: Yesterday's date, User's time zone, All drivers.");
+      log("HOS: On, Drive, Login/logout states only.");
+      log("Exceptions: Entering Zone (Office) and Exiting Zone (Office) rules.");
+      if (btn) btn.disabled = false;
     } else {
-      log("Standalone preview \u2014 open inside MyGeotab to run reports.");
+      log("Standalone preview - open inside MyGeotab to run reports.");
       if (btn) btn.disabled = false;
     }
   }
