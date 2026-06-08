@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var APP_VERSION = "1.0.2";
+  var APP_VERSION = "1.0.3";
 
   var _api = null;
   var _logs = [];
@@ -73,8 +73,13 @@
     var rows = Array.isArray(raw) ? raw : [];
     log("HOS logs fetched: " + rows.length + " rows.");
     
-    // Filter by allowed states: ON, D, Int_D, Login, Logout
-    var allowedStates = ["ON", "D", "Int_D", "Login", "Logout"];
+    // Log a sample of raw state values to verify what the API returns
+    var sampleStates = {};
+    rows.forEach(function (row) { sampleStates[row.state || row.dutystatus || "(none)"] = true; });
+    log("Raw state values from API: " + Object.keys(sampleStates).join(", "));
+
+    // Filter by allowed states (Geotab API enum values)
+    var allowedStates = ["On", "Drive", "IntermediateDrive", "Login/logout"];
     rows = rows.filter(function (row) {
       var state = row.state || row.dutystatus || "";
       return allowedStates.indexOf(state) >= 0;
